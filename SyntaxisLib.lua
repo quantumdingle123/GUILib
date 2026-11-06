@@ -277,29 +277,56 @@ end
 
 function Utils:MakeDraggable(handle, target, connList)
     if not handle or not target then return end
+    handle.Active = true
+
+    local dragging = false
+    local dragStart = nil
+    local startPos = nil
+
+    local function update(input)
+        local delta = input.Position - dragStart
+        target.Position = UDim2.new(
+            startPos.X.Scale,
+            startPos.X.Offset + delta.X,
+            startPos.Y.Scale,
+            startPos.Y.Offset + delta.Y
+        )
+    end
+
     local c1 = handle.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            local startPos = target.Position
-            local startInputPos = input.Position
+            dragging = true
+            dragStart = input.Position
+            startPos = target.Position
 
-            local moveConn
-            moveConn = input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.Change then
-                    local delta = input.Position - startInputPos
-                    target.Position = UDim2.new(
-                        startPos.X.Scale,
-                        startPos.X.Offset + delta.X,
-                        startPos.Y.Scale,
-                        startPos.Y.Offset + delta.Y
-                    )
-                elseif input.UserInputState == Enum.UserInputState.End then
-                    if moveConn then moveConn:Disconnect() end
+            local inputEndedConn
+            inputEndedConn = input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                    if inputEndedConn then inputEndedConn:Disconnect() end
                 end
             end)
-            if connList then table.insert(connList, moveConn) end
+            if connList then table.insert(connList, inputEndedConn) end
         end
     end)
-    if connList then table.insert(connList, c1) end
+
+    local c2 = UserInputService.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            update(input)
+        end
+    end)
+
+    local c3 = UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+        end
+    end)
+
+    if connList then
+        table.insert(connList, c1)
+        table.insert(connList, c2)
+        table.insert(connList, c3)
+    end
 end
 
 return Utils
@@ -2280,9 +2307,6 @@ function Panels:SetupStealPanel(ctx, stealPanelPg, opts)
     local formatValue = opts.FormatValue or function(v) return tostring(v or 0) end
 
     local function renderStealPanel()
-        local setid = setthreadidentity or set_thread_identity
-        if setid then pcall(setid, 7) end
-
         local savedCanvasY = spListScrl.CanvasPosition.Y
         for _, ch in ipairs(spListScrl:GetChildren()) do
             if ch:IsA("Frame") then ch:Destroy() end
@@ -2312,7 +2336,7 @@ function Panels:SetupStealPanel(ctx, stealPanelPg, opts)
         local activeTheme = ctx.ActiveTheme
 
         for i, item in ipairs(eggItems) do
-            local card = Instance.new("Frame")
+            local card = Instance.new("Frame", spListScrl)
             card.Size = UDim2.new(1, -4, 0, 50)
             card.BackgroundColor3 = activeTheme.CardBg
             card.BackgroundTransparency = 0.20
@@ -2320,13 +2344,12 @@ function Panels:SetupStealPanel(ctx, stealPanelPg, opts)
             card.LayoutOrder = i
             Utils:RoundCorner(card, 12)
 
-            local cStr = Instance.new("UIStroke")
+            local cStr = Instance.new("UIStroke", card)
             cStr.Thickness = 1
             cStr.Color = activeTheme.Stroke
             cStr.Transparency = 0.40
-            cStr.Parent = card
 
-            local img = Instance.new("ImageLabel")
+            local img = Instance.new("ImageLabel", card)
             img.Size = UDim2.new(0, 36, 0, 36)
             img.Position = UDim2.new(0, 7, 0.5, -18)
             img.BackgroundColor3 = activeTheme.RowBg
@@ -2334,9 +2357,8 @@ function Panels:SetupStealPanel(ctx, stealPanelPg, opts)
             img.BorderSizePixel = 0
             img.Image = tostring(item.Icon or "")
             Utils:RoundCorner(img, 8)
-            img.Parent = card
 
-            local nameLbl = Instance.new("TextLabel")
+            local nameLbl = Instance.new("TextLabel", card)
             nameLbl.Size = UDim2.new(1, -135, 0, 18)
             nameLbl.Position = UDim2.new(0, 48, 0, 7)
             nameLbl.BackgroundTransparency = 1
@@ -2346,9 +2368,8 @@ function Panels:SetupStealPanel(ctx, stealPanelPg, opts)
             nameLbl.TextXAlignment = Enum.TextXAlignment.Left
             nameLbl.TextTruncate = Enum.TextTruncate.AtEnd
             nameLbl.Text = string.format("%s [%s]", tostring(item.Name or "Egg"), tostring(item.Rarity or "Common"))
-            nameLbl.Parent = card
 
-            local subLbl = Instance.new("TextLabel")
+            local subLbl = Instance.new("TextLabel", card)
             subLbl.Size = UDim2.new(1, -135, 0, 16)
             subLbl.Position = UDim2.new(0, 48, 0, 26)
             subLbl.BackgroundTransparency = 1
@@ -2357,9 +2378,8 @@ function Panels:SetupStealPanel(ctx, stealPanelPg, opts)
             subLbl.TextColor3 = activeTheme.SubText
             subLbl.TextXAlignment = Enum.TextXAlignment.Left
             subLbl.Text = string.format("%s  |  %.2fx  |  %s", formatValue(item.Value or 0), tonumber(item.Scale) or 1, tostring(item.Area or "Unknown"))
-            subLbl.Parent = card
 
-            local actBtn = Instance.new("TextButton")
+            local actBtn = Instance.new("TextButton", card)
             actBtn.Size = UDim2.new(0, 76, 0, 28)
             actBtn.Position = UDim2.new(1, -82, 0.5, -14)
             actBtn.BorderSizePixel = 0
@@ -2381,11 +2401,6 @@ function Panels:SetupStealPanel(ctx, stealPanelPg, opts)
                     opts.OnSelectItem(item, actBtn)
                 end
             end)
-            actBtn.Parent = card
-
-            pcall(function()
-                card.Parent = spListScrl
-            end)
         end
         spListScrl.CanvasPosition = Vector2.new(0, savedCanvasY)
     end
@@ -2395,7 +2410,7 @@ function Panels:SetupStealPanel(ctx, stealPanelPg, opts)
         State.spSortIndex = ((State.spSortIndex or 1) % #spSortOptions) + 1
         State.spSortChoice = spSortOptions[State.spSortIndex]
         spSortBtn.Text = State.spSortChoice .. "  v"
-        pcall(renderStealPanel)
+        renderStealPanel()
     end))
 
     return renderStealPanel
@@ -2508,6 +2523,7 @@ function Window:Create(lib, config)
     topBar.Size = UDim2.new(1, 0, 0, 48)
     topBar.BorderSizePixel = 0
     topBar.ZIndex = 2
+    topBar.Active = true
 
     local topBarGrad = Utils:MakeGradient(topBar, 0)
 
@@ -2617,6 +2633,7 @@ function Window:Create(lib, config)
     ctx.ToggleOrb = tglBtn
 
     Utils:MakeDraggable(topBar, frm, ctx.Connections)
+    Utils:MakeDraggable(topTxt, frm, ctx.Connections)
     Utils:MakeDraggable(tglBtn, tglBtn, ctx.Connections)
 
     local sldrUI = {}
