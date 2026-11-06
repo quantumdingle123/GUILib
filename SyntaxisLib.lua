@@ -1,11 +1,11 @@
 -- ==============================================================================
--- [ SYNTAXIS GUI LIBRARY v2.0.0 - STANDALONE REUSABLE MODULE BUNDLE ]
+-- [ SYNTAXIS GUI LIBRARY v2.1.0 - STANDALONE REUSABLE MODULE BUNDLE ]
 -- Repository: https://github.com/quantumdingle123/GUILib
 -- Architecture: Modular (Themes, Animations, Utils, Modals, Components, Panels, Window)
 -- ==============================================================================
 
 local SyntaxisLib = {
-    Version = "2.0.0",
+    Version = "2.1.0",
     RepoBaseUrl = "https://raw.githubusercontent.com/quantumdingle123/GUILib/main/src/"
 }
 
@@ -246,21 +246,13 @@ return Animations
 -- ==============================================================================
 
 local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
 
 local Utils = {}
 
 function Utils:GetSafeParent()
     local safeContainer = nil
-    if typeof(gethui) == "function" then
-        local ok, res = pcall(gethui)
-        if ok and typeof(res) == "Instance" then safeContainer = res end
-    end
-    if not safeContainer then
-        pcall(function()
-            local cg = game:GetService("CoreGui")
-            if cg and typeof(cg) == "Instance" then safeContainer = cg end
-        end)
+    if gethui then
+        pcall(function() safeContainer = gethui() end)
     end
     if not safeContainer then
         local lp = Players.LocalPlayer or Players.PlayerAdded:Wait()
@@ -285,43 +277,26 @@ end
 
 function Utils:MakeDraggable(handle, target, connList)
     if not handle or not target then return end
-    local dragging = false
-    local dragStart = nil
-    local startPos = nil
-
     local c1 = handle.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true
-            dragStart = input.Position
-            startPos = target.Position
+            local startPos = target.Position
+            local startInputPos = input.Position
 
-            local changedConn
-            local endedConn
-
-            changedConn = UserInputService.InputChanged:Connect(function(moveInput)
-                if dragging and (moveInput.UserInputType == Enum.UserInputType.MouseMovement or moveInput.UserInputType == Enum.UserInputType.Touch) then
-                    local delta = moveInput.Position - dragStart
+            local moveConn
+            moveConn = input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.Change then
+                    local delta = input.Position - startInputPos
                     target.Position = UDim2.new(
                         startPos.X.Scale,
                         startPos.X.Offset + delta.X,
                         startPos.Y.Scale,
                         startPos.Y.Offset + delta.Y
                     )
+                elseif input.UserInputState == Enum.UserInputState.End then
+                    if moveConn then moveConn:Disconnect() end
                 end
             end)
-
-            endedConn = UserInputService.InputEnded:Connect(function(endInput)
-                if endInput.UserInputType == Enum.UserInputType.MouseButton1 or endInput.UserInputType == Enum.UserInputType.Touch then
-                    dragging = false
-                    if changedConn then changedConn:Disconnect() end
-                    if endedConn then endedConn:Disconnect() end
-                end
-            end)
-
-            if connList then
-                table.insert(connList, changedConn)
-                table.insert(connList, endedConn)
-            end
+            if connList then table.insert(connList, moveConn) end
         end
     end)
     if connList then table.insert(connList, c1) end
@@ -569,6 +544,7 @@ return Modals
 -- ==============================================================================
 
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 
 local Components = {}
 
@@ -722,7 +698,262 @@ function Components:CreateCategory(ctx, title, parent, order, defaultOpen)
     end
 
     function CategoryObj:CreateToggle(tTitle, desc, defaultState, callback, explicitOrder)
-        return Components:CreateToggle(ctx, tTitle, desc, defaultState, content, nextOrder(explicitOrder), callback)
+        
+local KEY_DISPLAY_NAMES = {
+    [Enum.KeyCode.RightControl] = "RCtrl",
+    [Enum.KeyCode.LeftControl] = "LCtrl",
+    [Enum.KeyCode.RightShift] = "RShift",
+    [Enum.KeyCode.LeftShift] = "LShift",
+    [Enum.KeyCode.RightAlt] = "RAlt",
+    [Enum.KeyCode.LeftAlt] = "LAlt",
+    [Enum.KeyCode.Return] = "Enter",
+    [Enum.KeyCode.Backspace] = "Backspace",
+    [Enum.KeyCode.Delete] = "Delete",
+    [Enum.KeyCode.Escape] = "Escape",
+    [Enum.KeyCode.Space] = "Space",
+    [Enum.KeyCode.Tab] = "Tab",
+    [Enum.KeyCode.CapsLock] = "Caps",
+    [Enum.KeyCode.Unknown] = "None"
+}
+
+local function formatKeyCode(kc)
+    if not kc or kc == Enum.KeyCode.Unknown then
+        return "None"
+    end
+    if KEY_DISPLAY_NAMES[kc] then
+        return KEY_DISPLAY_NAMES[kc]
+    end
+    local name = kc.Name or tostring(kc)
+    if #name > 7 then
+        return string.sub(name, 1, 7)
+    end
+    return name
+end
+
+function Components:CreateKeybind(ctx, title, desc, defaultKey, parent, order, callback)
+    local Animations = ctx.Animations
+    local Utils = ctx.Utils
+    local activeTheme = ctx.ActiveTheme
+
+    local currentKey = Enum.KeyCode.Unknown
+    if typeof(defaultKey) == "EnumItem" then
+        currentKey = defaultKey
+    elseif type(defaultKey) == "string" then
+        local ok, parsed = pcall(function() return Enum.KeyCode[defaultKey] end)
+        currentKey = (ok and parsed) or Enum.KeyCode.Unknown
+    end
+
+    local row = Instance.new("Frame", parent)
+    row.Size = UDim2.new(1, 0, 0, 52)
+    row.BackgroundColor3 = activeTheme.RowBg
+    row.BackgroundTransparency = 0.22
+    row.BorderSizePixel = 0
+    row.LayoutOrder = order or 1
+    Utils:RoundCorner(row, 10)
+
+    local rowStr = Instance.new("UIStroke", row)
+    rowStr.Thickness = 1
+    rowStr.Color = activeTheme.Stroke
+    rowStr.Transparency = 0.40
+
+    local tit = Instance.new("TextLabel", row)
+    tit.Size = UDim2.new(1, -110, 0, 18)
+    tit.Position = UDim2.new(0, 12, 0, 7)
+    tit.BackgroundTransparency = 1
+    tit.Font = Enum.Font.GothamBold
+    tit.TextSize = 12
+    tit.TextColor3 = Color3.fromRGB(255, 255, 255)
+    tit.TextXAlignment = Enum.TextXAlignment.Left
+    tit.Text = tostring(title or "Keybind")
+
+    local sub = Instance.new("TextLabel", row)
+    sub.Size = UDim2.new(1, -110, 0, 20)
+    sub.Position = UDim2.new(0, 12, 0, 25)
+    sub.BackgroundTransparency = 1
+    sub.Font = Enum.Font.Gotham
+    sub.TextSize = 9.5
+    sub.TextColor3 = activeTheme.SubText
+    sub.TextXAlignment = Enum.TextXAlignment.Left
+    sub.TextWrapped = true
+    sub.Text = tostring(desc or "")
+
+    local normalBadgeSize = UDim2.new(0, 86, 0, 28)
+    local btn = Instance.new("TextButton", row)
+    btn.AnchorPoint = Vector2.new(1, 0.5)
+    btn.Size = normalBadgeSize
+    btn.Position = UDim2.new(1, -10, 0.5, 0)
+    btn.BackgroundColor3 = activeTheme.BoxBg
+    btn.BackgroundTransparency = 0.15
+    btn.BorderSizePixel = 0
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 11
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.Text = "[ " .. formatKeyCode(currentKey) .. " ]"
+    btn:SetAttribute("NoTrans", true)
+    Utils:RoundCorner(btn, 8)
+
+    local btnStr = Instance.new("UIStroke", btn)
+    btnStr.Thickness = 1
+    btnStr.Color = activeTheme.Stroke
+    btnStr.Transparency = 0.35
+    btnStr:SetAttribute("NoTrans", true)
+
+    local isListening = false
+    local listenConn = nil
+
+    local function stopListening(cancelled)
+        if not isListening then return end
+        isListening = false
+        if listenConn then
+            listenConn:Disconnect()
+            listenConn = nil
+        end
+        btnStr.Color = ctx.ActiveTheme.Stroke
+        btnStr.Thickness = 1
+        btn.BackgroundColor3 = ctx.ActiveTheme.BoxBg
+        btn.Text = "[ " .. formatKeyCode(currentKey) .. " ]"
+        Animations:Tween(btn, Animations.Fast, { Size = normalBadgeSize })
+    end
+
+    local function applyKey(newKey)
+        currentKey = newKey
+        isListening = false
+        if listenConn then
+            listenConn:Disconnect()
+            listenConn = nil
+        end
+        btn.Text = "[ " .. formatKeyCode(currentKey) .. " ]"
+        btnStr.Color = ctx.ActiveTheme.Accent2
+        btn.BackgroundColor3 = ctx.ActiveTheme.Accent
+
+        -- Energetic iOS Spring Pop Confirmation (1.08x -> 1.0x) + Color flash
+        Animations:Tween(btn, TweenInfo.new(0.08, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+            Size = UDim2.new(0, math.floor(normalBadgeSize.X.Offset * 1.08), 0, math.floor(normalBadgeSize.Y.Offset * 1.08))
+        })
+        task.delay(0.09, function()
+            Animations:Tween(btn, Animations.iOSSpring, { Size = normalBadgeSize })
+            task.delay(0.20, function()
+                if not isListening then
+                    Animations:Tween(btn, Animations.Smooth, { BackgroundColor3 = ctx.ActiveTheme.BoxBg })
+                    Animations:Tween(btnStr, Animations.Smooth, { Color = ctx.ActiveTheme.Stroke })
+                end
+            end)
+        end)
+
+        if callback then
+            task.spawn(callback, currentKey, false)
+        end
+    end
+
+    local function startListening()
+        if isListening then
+            stopListening(true)
+            return
+        end
+        isListening = true
+        btn.Text = "[ ... ]"
+        btnStr.Color = ctx.ActiveTheme.Accent2
+        btnStr.Thickness = 1.4
+        btn.BackgroundColor3 = ctx.ActiveTheme.Accent
+        Animations:Tween(btn, Animations.Fast, { Size = normalBadgeSize })
+
+        if listenConn then listenConn:Disconnect() end
+        listenConn = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+            if not isListening then return end
+
+            if input.UserInputType == Enum.UserInputType.Keyboard then
+                local kc = input.KeyCode
+                if kc == Enum.KeyCode.Backspace or kc == Enum.KeyCode.Delete or kc == Enum.KeyCode.Escape then
+                    applyKey(Enum.KeyCode.Unknown)
+                else
+                    applyKey(kc)
+                end
+            elseif input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.MouseButton2 or input.UserInputType == Enum.UserInputType.Touch then
+                stopListening(true)
+            end
+        end)
+        table.insert(ctx.Connections, listenConn)
+    end
+
+    -- Tactile click press micro-indent
+    table.insert(ctx.Connections, btn.InputBegan:Connect(function(input)
+        if not isListening and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
+            Animations:Tween(btn, Animations.Fast, {
+                Size = UDim2.new(0, math.floor(normalBadgeSize.X.Offset * 0.92), 0, math.floor(normalBadgeSize.Y.Offset * 0.92))
+            })
+        end
+    end))
+
+    table.insert(ctx.Connections, btn.InputEnded:Connect(function(input)
+        if not isListening and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
+            Animations:Tween(btn, Animations.Spring, { Size = normalBadgeSize })
+        end
+    end))
+
+    table.insert(ctx.Connections, btn.MouseButton1Click:Connect(startListening))
+
+    -- Live gameplay key listener: triggers on physical keypress and mirrors tactile tap on screen
+    local globalKeyConn = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if isListening then return end
+        if gameProcessed then return end
+        if UserInputService:GetFocusedTextBox() then return end
+
+        if currentKey and currentKey ~= Enum.KeyCode.Unknown and input.KeyCode == currentKey then
+            if btn and btn.Parent and row.Visible then
+                Animations:Tween(btn, TweenInfo.new(0.06, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+                    Size = UDim2.new(0, math.floor(normalBadgeSize.X.Offset * 0.90), 0, math.floor(normalBadgeSize.Y.Offset * 0.90)),
+                    BackgroundColor3 = ctx.ActiveTheme.Accent
+                })
+                task.delay(0.08, function()
+                    Animations:Tween(btn, Animations.Spring, {
+                        Size = normalBadgeSize,
+                        BackgroundColor3 = ctx.ActiveTheme.BoxBg
+                    })
+                end)
+            end
+
+            if callback then
+                task.spawn(callback, currentKey, true)
+            end
+        end
+    end)
+    table.insert(ctx.Connections, globalKeyConn)
+
+    table.insert(ctx.State.themeSubscribers, function(th)
+        row.BackgroundColor3 = th.RowBg
+        rowStr.Color = th.Stroke
+        sub.TextColor3 = th.SubText
+        if not isListening then
+            btn.BackgroundColor3 = th.BoxBg
+            btnStr.Color = th.Stroke
+        else
+            btn.BackgroundColor3 = th.Accent
+            btnStr.Color = th.Accent2
+        end
+    end)
+
+    return {
+        Instance = row,
+        Button = btn,
+        GetKey = function() return currentKey end,
+        SetKey = function(_, newKey, fire)
+            local kc = newKey
+            if type(newKey) == "string" then
+                local ok, parsed = pcall(function() return Enum.KeyCode[newKey] end)
+                kc = (ok and parsed) or Enum.KeyCode.Unknown
+            end
+            applyKey(kc or Enum.KeyCode.Unknown)
+            if fire and callback then
+                task.spawn(callback, currentKey, false)
+            end
+        end,
+        OnPress = function(_, fn)
+            callback = fn
+        end
+    }
+end
+
+return Components:CreateToggle(ctx, tTitle, desc, defaultState, content, nextOrder(explicitOrder), callback)
     end
 
     function CategoryObj:CreateSlider(sTitle, desc, min, max, defaultVal, increment, callback, explicitOrder)
@@ -751,6 +982,10 @@ function Components:CreateCategory(ctx, title, parent, order, defaultOpen)
 
     function CategoryObj:CreateSeparator(explicitOrder)
         return Components:CreateSeparator(ctx, content, nextOrder(explicitOrder))
+    end
+
+    function CategoryObj:CreateKeybind(kbTitle, desc, defaultKey, callback, explicitOrder)
+        return Components:CreateKeybind(ctx, kbTitle, desc, defaultKey, content, nextOrder(explicitOrder), callback)
     end
 
     return CategoryObj, content
@@ -2292,7 +2527,7 @@ function Window:Create(lib, config)
     tglStr.Transparency = 0.20
     tglStr.Color = activeTheme.Accent
 
-    local side = Instance.new("ScrollingFrame", frm)
+    local side = Instance.new("Frame", frm)
     side.Name = "Sidebar"
     side.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     side.BackgroundTransparency = 0.25
@@ -2300,9 +2535,6 @@ function Window:Create(lib, config)
     side.Position = UDim2.new(0, 10, 0, 50)
     side.Size = UDim2.new(0, 126, 1, -60)
     side.ZIndex = 2
-    side.ScrollBarThickness = 0
-    side.AutomaticCanvasSize = Enum.AutomaticSize.Y
-    side.CanvasSize = UDim2.new(0, 0, 0, 0)
     Utils:RoundCorner(side, 16)
 
     local sideGrad = Utils:MakeGradient(side, 135)

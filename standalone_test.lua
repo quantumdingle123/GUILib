@@ -1,6 +1,6 @@
 -- ==============================================================================
 -- [ SYNTAXIS GUI LIBRARY v2.0.0 - STANDALONE VERIFICATION & DEMO SCRIPT ]
--- Repository: https://github.com/quantumdingle123/GUILib
+-- Repository: https://github.com/tenobarillas-ship-it/Testing
 -- Purpose: Standalone test environment verifying all modules, components,
 --          callbacks, themes, floating dropdowns, dynamic panels, and cleanup.
 -- ==============================================================================
@@ -11,12 +11,11 @@ local SyntaxisLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/q
 local DemoState = {
     themeName = "Sapphire",
     priorityList = {
-        "Auto Steal",
-        "Candy Cane Farm",
-        "Auto Pumpkin",
+        "Automation Steal",
+        "Halloween Event 2026",
+        "Automation Treadmill",
         "Enchanted / Bloom Event",
-        "Auto Upgrades",
-        "Auto Treadmill"
+        "Automation Upgrades"
     },
     targetedSpecificUid = nil,
     activeStealButtons = {},
@@ -122,6 +121,26 @@ CatControls:CreateTextbox(
     "",
     function(text)
         LblStatus:SetText("Webhook updated: " .. (#text > 0 and "Configured" or "Empty"))
+    end
+)
+
+
+CatControls:CreateKeybind(
+    "Toggle Menu Keybind",
+    "Press this key to open or close the GUI",
+    Enum.KeyCode.RightControl,
+    function(key, isPressed)
+        if isPressed then
+            print("[SyntaxisTest] Keybind pressed in-game:", tostring(key))
+            Window:Notify({
+                Title = "Keybind Fired",
+                Content = "Triggered: " .. tostring(key.Name or key),
+                Duration = 1.5
+            })
+        else
+            print("[SyntaxisTest] Keybind changed to:", tostring(key))
+            LblStatus:SetText("Keybind updated: " .. tostring(key.Name or key))
+        end
     end
 )
 
