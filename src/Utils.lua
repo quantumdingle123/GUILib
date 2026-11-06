@@ -43,9 +43,21 @@ end
 
 function Utils:MakeDraggable(handle, target, connList)
     if not handle or not target then return end
+    handle.Active = true
+
     local dragging = false
     local dragStart = nil
     local startPos = nil
+
+    local function update(input)
+        local delta = input.Position - dragStart
+        target.Position = UDim2.new(
+            startPos.X.Scale,
+            startPos.X.Offset + delta.X,
+            startPos.Y.Scale,
+            startPos.Y.Offset + delta.Y
+        )
+    end
 
     local c1 = handle.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -53,36 +65,34 @@ function Utils:MakeDraggable(handle, target, connList)
             dragStart = input.Position
             startPos = target.Position
 
-            local changedConn
-            local endedConn
-
-            changedConn = UserInputService.InputChanged:Connect(function(moveInput)
-                if dragging and (moveInput.UserInputType == Enum.UserInputType.MouseMovement or moveInput.UserInputType == Enum.UserInputType.Touch) then
-                    local delta = moveInput.Position - dragStart
-                    target.Position = UDim2.new(
-                        startPos.X.Scale,
-                        startPos.X.Offset + delta.X,
-                        startPos.Y.Scale,
-                        startPos.Y.Offset + delta.Y
-                    )
-                end
-            end)
-
-            endedConn = UserInputService.InputEnded:Connect(function(endInput)
-                if endInput.UserInputType == Enum.UserInputType.MouseButton1 or endInput.UserInputType == Enum.UserInputType.Touch then
+            local inputEndedConn
+            inputEndedConn = input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
                     dragging = false
-                    if changedConn then changedConn:Disconnect() end
-                    if endedConn then endedConn:Disconnect() end
+                    if inputEndedConn then inputEndedConn:Disconnect() end
                 end
             end)
-
-            if connList then
-                table.insert(connList, changedConn)
-                table.insert(connList, endedConn)
-            end
+            if connList then table.insert(connList, inputEndedConn) end
         end
     end)
-    if connList then table.insert(connList, c1) end
+
+    local c2 = UserInputService.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            update(input)
+        end
+    end)
+
+    local c3 = UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+        end
+    end)
+
+    if connList then
+        table.insert(connList, c1)
+        table.insert(connList, c2)
+        table.insert(connList, c3)
+    end
 end
 
 return Utils
