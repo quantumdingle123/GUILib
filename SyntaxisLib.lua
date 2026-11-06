@@ -2280,6 +2280,9 @@ function Panels:SetupStealPanel(ctx, stealPanelPg, opts)
     local formatValue = opts.FormatValue or function(v) return tostring(v or 0) end
 
     local function renderStealPanel()
+        local setid = setthreadidentity or set_thread_identity
+        if setid then pcall(setid, 7) end
+
         local savedCanvasY = spListScrl.CanvasPosition.Y
         for _, ch in ipairs(spListScrl:GetChildren()) do
             if ch:IsA("Frame") then ch:Destroy() end
@@ -2309,7 +2312,7 @@ function Panels:SetupStealPanel(ctx, stealPanelPg, opts)
         local activeTheme = ctx.ActiveTheme
 
         for i, item in ipairs(eggItems) do
-            local card = Instance.new("Frame", spListScrl)
+            local card = Instance.new("Frame")
             card.Size = UDim2.new(1, -4, 0, 50)
             card.BackgroundColor3 = activeTheme.CardBg
             card.BackgroundTransparency = 0.20
@@ -2317,12 +2320,13 @@ function Panels:SetupStealPanel(ctx, stealPanelPg, opts)
             card.LayoutOrder = i
             Utils:RoundCorner(card, 12)
 
-            local cStr = Instance.new("UIStroke", card)
+            local cStr = Instance.new("UIStroke")
             cStr.Thickness = 1
             cStr.Color = activeTheme.Stroke
             cStr.Transparency = 0.40
+            cStr.Parent = card
 
-            local img = Instance.new("ImageLabel", card)
+            local img = Instance.new("ImageLabel")
             img.Size = UDim2.new(0, 36, 0, 36)
             img.Position = UDim2.new(0, 7, 0.5, -18)
             img.BackgroundColor3 = activeTheme.RowBg
@@ -2330,8 +2334,9 @@ function Panels:SetupStealPanel(ctx, stealPanelPg, opts)
             img.BorderSizePixel = 0
             img.Image = tostring(item.Icon or "")
             Utils:RoundCorner(img, 8)
+            img.Parent = card
 
-            local nameLbl = Instance.new("TextLabel", card)
+            local nameLbl = Instance.new("TextLabel")
             nameLbl.Size = UDim2.new(1, -135, 0, 18)
             nameLbl.Position = UDim2.new(0, 48, 0, 7)
             nameLbl.BackgroundTransparency = 1
@@ -2341,8 +2346,9 @@ function Panels:SetupStealPanel(ctx, stealPanelPg, opts)
             nameLbl.TextXAlignment = Enum.TextXAlignment.Left
             nameLbl.TextTruncate = Enum.TextTruncate.AtEnd
             nameLbl.Text = string.format("%s [%s]", tostring(item.Name or "Egg"), tostring(item.Rarity or "Common"))
+            nameLbl.Parent = card
 
-            local subLbl = Instance.new("TextLabel", card)
+            local subLbl = Instance.new("TextLabel")
             subLbl.Size = UDim2.new(1, -135, 0, 16)
             subLbl.Position = UDim2.new(0, 48, 0, 26)
             subLbl.BackgroundTransparency = 1
@@ -2351,8 +2357,9 @@ function Panels:SetupStealPanel(ctx, stealPanelPg, opts)
             subLbl.TextColor3 = activeTheme.SubText
             subLbl.TextXAlignment = Enum.TextXAlignment.Left
             subLbl.Text = string.format("%s  |  %.2fx  |  %s", formatValue(item.Value or 0), tonumber(item.Scale) or 1, tostring(item.Area or "Unknown"))
+            subLbl.Parent = card
 
-            local actBtn = Instance.new("TextButton", card)
+            local actBtn = Instance.new("TextButton")
             actBtn.Size = UDim2.new(0, 76, 0, 28)
             actBtn.Position = UDim2.new(1, -82, 0.5, -14)
             actBtn.BorderSizePixel = 0
@@ -2374,6 +2381,11 @@ function Panels:SetupStealPanel(ctx, stealPanelPg, opts)
                     opts.OnSelectItem(item, actBtn)
                 end
             end)
+            actBtn.Parent = card
+
+            pcall(function()
+                card.Parent = spListScrl
+            end)
         end
         spListScrl.CanvasPosition = Vector2.new(0, savedCanvasY)
     end
@@ -2383,7 +2395,7 @@ function Panels:SetupStealPanel(ctx, stealPanelPg, opts)
         State.spSortIndex = ((State.spSortIndex or 1) % #spSortOptions) + 1
         State.spSortChoice = spSortOptions[State.spSortIndex]
         spSortBtn.Text = State.spSortChoice .. "  v"
-        renderStealPanel()
+        pcall(renderStealPanel)
     end))
 
     return renderStealPanel
