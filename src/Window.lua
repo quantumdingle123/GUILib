@@ -101,6 +101,7 @@ function Window:Create(lib, config)
     topBar.Size = UDim2.new(1, 0, 0, 48)
     topBar.BorderSizePixel = 0
     topBar.ZIndex = 2
+    topBar.Active = true
 
     local topBarGrad = Utils:MakeGradient(topBar, 0)
 
@@ -213,6 +214,7 @@ function Window:Create(lib, config)
     ctx.ToggleOrb = tglBtn
 
     Utils:MakeDraggable(topBar, frm, ctx.Connections)
+    Utils:MakeDraggable(topTxt, frm, ctx.Connections)
     Utils:MakeDraggable(tglBtn, tglBtn, ctx.Connections)
 
     local sldrUI = {}
