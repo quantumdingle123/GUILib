@@ -246,13 +246,21 @@ return Animations
 -- ==============================================================================
 
 local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
 
 local Utils = {}
 
 function Utils:GetSafeParent()
     local safeContainer = nil
-    if gethui then
-        pcall(function() safeContainer = gethui() end)
+    if typeof(gethui) == "function" then
+        local ok, res = pcall(gethui)
+        if ok and typeof(res) == "Instance" then safeContainer = res end
+    end
+    if not safeContainer then
+        pcall(function()
+            local cg = game:GetService("CoreGui")
+            if cg and typeof(cg) == "Instance" then safeContainer = cg end
+        end)
     end
     if not safeContainer then
         local lp = Players.LocalPlayer or Players.PlayerAdded:Wait()
@@ -284,6 +292,7 @@ function Utils:MakeDraggable(handle, target, connList)
     local startPos = nil
 
     local function update(input)
+        if not dragging or not dragStart or not startPos then return end
         local delta = input.Position - dragStart
         target.Position = UDim2.new(
             startPos.X.Scale,
@@ -298,15 +307,6 @@ function Utils:MakeDraggable(handle, target, connList)
             dragging = true
             dragStart = input.Position
             startPos = target.Position
-
-            local inputEndedConn
-            inputEndedConn = input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then
-                    dragging = false
-                    if inputEndedConn then inputEndedConn:Disconnect() end
-                end
-            end)
-            if connList then table.insert(connList, inputEndedConn) end
         end
     end)
 
@@ -319,6 +319,8 @@ function Utils:MakeDraggable(handle, target, connList)
     local c3 = UserInputService.InputEnded:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = false
+            dragStart = nil
+            startPos = nil
         end
     end)
 
@@ -2519,7 +2521,7 @@ function Window:Create(lib, config)
     local topBar = Instance.new("Frame", frm)
     topBar.Name = "TitleBar"
     topBar.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    topBar.BackgroundTransparency = 1
+    topBar.BackgroundTransparency = 0.999
     topBar.Size = UDim2.new(1, 0, 0, 48)
     topBar.BorderSizePixel = 0
     topBar.ZIndex = 2
@@ -2537,6 +2539,7 @@ function Window:Create(lib, config)
     topTxt.TextXAlignment = Enum.TextXAlignment.Center
     topTxt.TextYAlignment = Enum.TextYAlignment.Center
     topTxt.Text = tostring(config.Title or "Syntaxis")
+    topTxt.Active = false
 
     local tglBtn = Instance.new("ImageButton", mainUI)
     tglBtn.Name = "Toggle"
@@ -2620,8 +2623,8 @@ function Window:Create(lib, config)
 
     local popupLayer = Instance.new("Frame", frm)
     popupLayer.Name = "PopupOverlayLayer"
-    popupLayer.Size = UDim2.new(1, 0, 1, 0)
-    popupLayer.Position = UDim2.new(0, 0, 0, 0)
+    popupLayer.Size = UDim2.new(1, 0, 1, -48)
+    popupLayer.Position = UDim2.new(0, 0, 0, 48)
     popupLayer.BackgroundTransparency = 1
     popupLayer.ZIndex = 50
 
@@ -2633,7 +2636,6 @@ function Window:Create(lib, config)
     ctx.ToggleOrb = tglBtn
 
     Utils:MakeDraggable(topBar, frm, ctx.Connections)
-    Utils:MakeDraggable(topTxt, frm, ctx.Connections)
     Utils:MakeDraggable(tglBtn, tglBtn, ctx.Connections)
 
     local sldrUI = {}

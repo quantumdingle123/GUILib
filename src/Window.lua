@@ -97,7 +97,7 @@ function Window:Create(lib, config)
     local topBar = Instance.new("Frame", frm)
     topBar.Name = "TitleBar"
     topBar.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    topBar.BackgroundTransparency = 1
+    topBar.BackgroundTransparency = 0.999
     topBar.Size = UDim2.new(1, 0, 0, 48)
     topBar.BorderSizePixel = 0
     topBar.ZIndex = 2
@@ -115,6 +115,7 @@ function Window:Create(lib, config)
     topTxt.TextXAlignment = Enum.TextXAlignment.Center
     topTxt.TextYAlignment = Enum.TextYAlignment.Center
     topTxt.Text = tostring(config.Title or "Syntaxis")
+    topTxt.Active = false
 
     local tglBtn = Instance.new("ImageButton", mainUI)
     tglBtn.Name = "Toggle"
@@ -133,7 +134,7 @@ function Window:Create(lib, config)
     tglStr.Transparency = 0.20
     tglStr.Color = activeTheme.Accent
 
-    local side = Instance.new("ScrollingFrame", frm)
+    local side = Instance.new("Frame", frm)
     side.Name = "Sidebar"
     side.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     side.BackgroundTransparency = 0.25
@@ -141,9 +142,6 @@ function Window:Create(lib, config)
     side.Position = UDim2.new(0, 10, 0, 50)
     side.Size = UDim2.new(0, 126, 1, -60)
     side.ZIndex = 2
-    side.ScrollBarThickness = 0
-    side.AutomaticCanvasSize = Enum.AutomaticSize.Y
-    side.CanvasSize = UDim2.new(0, 0, 0, 0)
     Utils:RoundCorner(side, 16)
 
     local sideGrad = Utils:MakeGradient(side, 135)
@@ -201,8 +199,8 @@ function Window:Create(lib, config)
 
     local popupLayer = Instance.new("Frame", frm)
     popupLayer.Name = "PopupOverlayLayer"
-    popupLayer.Size = UDim2.new(1, 0, 1, 0)
-    popupLayer.Position = UDim2.new(0, 0, 0, 0)
+    popupLayer.Size = UDim2.new(1, 0, 1, -48)
+    popupLayer.Position = UDim2.new(0, 0, 0, 48)
     popupLayer.BackgroundTransparency = 1
     popupLayer.ZIndex = 50
 
@@ -214,7 +212,6 @@ function Window:Create(lib, config)
     ctx.ToggleOrb = tglBtn
 
     Utils:MakeDraggable(topBar, frm, ctx.Connections)
-    Utils:MakeDraggable(topTxt, frm, ctx.Connections)
     Utils:MakeDraggable(tglBtn, tglBtn, ctx.Connections)
 
     local sldrUI = {}

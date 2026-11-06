@@ -50,6 +50,7 @@ function Utils:MakeDraggable(handle, target, connList)
     local startPos = nil
 
     local function update(input)
+        if not dragging or not dragStart or not startPos then return end
         local delta = input.Position - dragStart
         target.Position = UDim2.new(
             startPos.X.Scale,
@@ -64,15 +65,6 @@ function Utils:MakeDraggable(handle, target, connList)
             dragging = true
             dragStart = input.Position
             startPos = target.Position
-
-            local inputEndedConn
-            inputEndedConn = input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then
-                    dragging = false
-                    if inputEndedConn then inputEndedConn:Disconnect() end
-                end
-            end)
-            if connList then table.insert(connList, inputEndedConn) end
         end
     end)
 
@@ -85,6 +77,8 @@ function Utils:MakeDraggable(handle, target, connList)
     local c3 = UserInputService.InputEnded:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = false
+            dragStart = nil
+            startPos = nil
         end
     end)
 
