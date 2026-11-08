@@ -15,20 +15,41 @@ function Window:Create(lib, config)
     local Panels = lib.Panels
 
     local safeContainer = Utils:GetSafeParent()
-    local guiName = config.GuiName or "SyntaxHubGUI"
+    local rawGuiName = config.GuiName
+    local isCamouflage = (config.Camouflage ~= false)
 
     pcall(function()
         for _, child in ipairs(safeContainer:GetChildren()) do
-            if child.Name == guiName then child:Destroy() end
+            if child:GetAttribute("SyntaxisInstance") == true
+               or (rawGuiName and child.Name == rawGuiName)
+               or child.Name == "SyntaxHubGUI" then
+                child:Destroy()
+            end
         end
     end)
 
     local mainUI = Instance.new("ScreenGui")
-    mainUI.Name = guiName
+    if rawGuiName then
+        mainUI.Name = rawGuiName
+    elseif isCamouflage then
+        local randId = string.format("%08x", math.random(0, 0xFFFFFFFF))
+        mainUI.Name = "G_" .. randId
+    else
+        mainUI.Name = "SyntaxHubGUI"
+    end
+
+    mainUI:SetAttribute("SyntaxisInstance", true)
     mainUI.ResetOnSpawn = false
     mainUI.DisplayOrder = 999999999
     -- Sibling ZIndexBehavior prevents translucent parent containers from rendering over child text/toggles
     mainUI.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+    if typeof(syn) == "table" and typeof(syn.protect_gui) == "function" then
+        pcall(syn.protect_gui, mainUI)
+    elseif typeof(protectgui) == "function" then
+        pcall(protectgui, mainUI)
+    end
+
     mainUI.Parent = safeContainer
 
     local sharedState = config.State or {}
@@ -57,8 +78,21 @@ function Window:Create(lib, config)
         Tabs = {},
         TabButtons = {},
         ThemeButtons = {},
+        SearchIndex = {},
+        Categories = {},
         IsAlive = true
     }
+
+    function ctx:RegisterSearchItem(title, desc, itemObj, categoryObj)
+        if not self.SearchIndex then self.SearchIndex = {} end
+        local inst = (type(itemObj) == "table" and itemObj.Instance) or itemObj
+        table.insert(self.SearchIndex, {
+            Title = tostring(title or ""),
+            Desc = tostring(desc or ""),
+            Instance = inst,
+            Category = categoryObj
+        })
+    end
 
     local winSize = config.Size or UDim2.new(0, 510, 0, 345)
 
@@ -105,17 +139,81 @@ function Window:Create(lib, config)
 
     local topBarGrad = Utils:MakeGradient(topBar, 0)
 
+    local enableSearch = (config.SearchBar ~= false)
+
     local topTxt = Instance.new("TextLabel", topBar)
     topTxt.BackgroundTransparency = 1
-    topTxt.Position = UDim2.new(0, 0, 0, 0)
-    topTxt.Size = UDim2.new(1, 0, 1, 0)
+    topTxt.Position = enableSearch and UDim2.new(0, 16, 0, 0) or UDim2.new(0, 0, 0, 0)
+    topTxt.Size = enableSearch and UDim2.new(1, -184, 1, 0) or UDim2.new(1, 0, 1, 0)
     topTxt.Font = Enum.Font.GothamBold
-    topTxt.TextSize = 18
+    topTxt.TextSize = 17
     topTxt.TextColor3 = Color3.fromRGB(255, 255, 255)
-    topTxt.TextXAlignment = Enum.TextXAlignment.Center
+    topTxt.TextXAlignment = enableSearch and Enum.TextXAlignment.Left or Enum.TextXAlignment.Center
     topTxt.TextYAlignment = Enum.TextYAlignment.Center
     topTxt.Text = tostring(config.Title or "Syntaxis")
     topTxt.Active = false
+
+    local searchHolder, searchStroke, searchInp, clearBtn
+    if enableSearch then
+        searchHolder = Instance.new("Frame", topBar)
+        searchHolder.Name = "SearchBar"
+        searchHolder.Size = UDim2.new(0, 154, 0, 26)
+        searchHolder.AnchorPoint = Vector2.new(1, 0.5)
+        searchHolder.Position = UDim2.new(1, -12, 0.5, 0)
+        searchHolder.BackgroundColor3 = activeTheme.BoxBg
+        searchHolder.BackgroundTransparency = 0.30
+        searchHolder.BorderSizePixel = 0
+        searchHolder.Active = true
+        searchHolder.ZIndex = 5
+        Utils:RoundCorner(searchHolder, 999)
+
+        searchStroke = Instance.new("UIStroke", searchHolder)
+        searchStroke.Thickness = 1
+        searchStroke.Color = activeTheme.Stroke
+        searchStroke.Transparency = 0.45
+
+        local searchIcon = Instance.new("TextLabel", searchHolder)
+        searchIcon.Name = "Icon"
+        searchIcon.Size = UDim2.new(0, 20, 1, 0)
+        searchIcon.Position = UDim2.new(0, 6, 0, 0)
+        searchIcon.BackgroundTransparency = 1
+        searchIcon.Font = Enum.Font.GothamMedium
+        searchIcon.TextSize = 11
+        searchIcon.TextColor3 = Color3.fromRGB(180, 205, 240)
+        searchIcon.Text = "🔍"
+        searchIcon.Active = false
+        searchIcon.ZIndex = 6
+
+        searchInp = Instance.new("TextBox", searchHolder)
+        searchInp.Name = "Input"
+        searchInp.Size = UDim2.new(1, -50, 1, 0)
+        searchInp.Position = UDim2.new(0, 26, 0, 0)
+        searchInp.BackgroundTransparency = 1
+        searchInp.Font = Enum.Font.GothamMedium
+        searchInp.TextSize = 11
+        searchInp.TextColor3 = Color3.fromRGB(255, 255, 255)
+        searchInp.PlaceholderColor3 = Color3.fromRGB(150, 175, 210)
+        searchInp.PlaceholderText = "Search..."
+        searchInp.Text = ""
+        searchInp.ClearTextOnFocus = false
+        searchInp.TextXAlignment = Enum.TextXAlignment.Left
+        searchInp.Active = true
+        searchInp.ZIndex = 6
+
+        clearBtn = Instance.new("TextButton", searchHolder)
+        clearBtn.Name = "ClearBtn"
+        clearBtn.Size = UDim2.new(0, 18, 0, 18)
+        clearBtn.AnchorPoint = Vector2.new(1, 0.5)
+        clearBtn.Position = UDim2.new(1, -5, 0.5, 0)
+        clearBtn.BackgroundTransparency = 1
+        clearBtn.Font = Enum.Font.GothamBold
+        clearBtn.TextSize = 11
+        clearBtn.TextColor3 = Color3.fromRGB(180, 200, 230)
+        clearBtn.Text = "✕"
+        clearBtn.Visible = false
+        clearBtn.Active = true
+        clearBtn.ZIndex = 7
+    end
 
     local tglBtn = Instance.new("ImageButton", mainUI)
     tglBtn.Name = "Toggle"
@@ -288,6 +386,88 @@ function Window:Create(lib, config)
         end
     end
 
+    local function filterSearch(rawQuery)
+        if not enableSearch then return end
+        local query = tostring(rawQuery or ""):lower():match("^%s*(.-)%s*$")
+        local isSearching = (#query > 0)
+        if clearBtn then clearBtn.Visible = isSearching end
+
+        local matchingCategories = {}
+
+        if not isSearching then
+            for _, item in ipairs(ctx.SearchIndex) do
+                if item.Instance and item.Instance:IsA("GuiObject") then
+                    item.Instance.Visible = true
+                end
+            end
+            for _, cat in ipairs(ctx.Categories) do
+                if cat.Frame and cat.Frame:IsA("GuiObject") then
+                    cat.Frame.Visible = true
+                end
+                if cat.SetOpen then
+                    cat:SetOpen(cat.DefaultOpen or false)
+                end
+            end
+            return
+        end
+
+        for _, item in ipairs(ctx.SearchIndex) do
+            local tMatch = string.find(item.Title:lower(), query, 1, true) ~= nil
+            local dMatch = string.find(item.Desc:lower(), query, 1, true) ~= nil
+            local matched = tMatch or dMatch
+            if item.Instance and item.Instance:IsA("GuiObject") then
+                item.Instance.Visible = matched
+            end
+            if matched and item.Category then
+                matchingCategories[item.Category] = true
+            end
+        end
+
+        local currentHasMatch = false
+        local firstMatchTabIdx = nil
+
+        for _, cat in ipairs(ctx.Categories) do
+            local catTitleMatch = string.find((cat.Title or ""):lower(), query, 1, true) ~= nil
+            if catTitleMatch then
+                if cat.Frame and cat.Frame:IsA("GuiObject") then
+                    cat.Frame.Visible = true
+                end
+                for _, item in ipairs(ctx.SearchIndex) do
+                    if item.Category == cat and item.Instance and item.Instance:IsA("GuiObject") then
+                        item.Instance.Visible = true
+                    end
+                end
+                if cat.SetOpen then cat:SetOpen(true) end
+                matchingCategories[cat] = true
+            elseif matchingCategories[cat] then
+                if cat.Frame and cat.Frame:IsA("GuiObject") then
+                    cat.Frame.Visible = true
+                end
+                if cat.SetOpen then cat:SetOpen(true) end
+            else
+                if cat.Frame and cat.Frame:IsA("GuiObject") then
+                    cat.Frame.Visible = false
+                end
+            end
+
+            if matchingCategories[cat] and cat.Frame then
+                for tIdx, tabData in ipairs(ctx.Tabs) do
+                    if tabData.Page and cat.Frame:IsDescendantOf(tabData.Page) then
+                        if tIdx == sharedState.curCat then
+                            currentHasMatch = true
+                        elseif not firstMatchTabIdx then
+                            firstMatchTabIdx = tIdx
+                        end
+                    end
+                end
+            end
+        end
+
+        if not currentHasMatch and firstMatchTabIdx then
+            swapCat(firstMatchTabIdx)
+        end
+    end
+
     local function applyTrans(val)
         val = math.clamp(tonumber(val) or 0, 0, 100)
         local a = val / 100
@@ -365,6 +545,10 @@ function Window:Create(lib, config)
         end
         if ctx.SpSortBtn then ctx.SpSortBtn.BackgroundColor3 = t.BoxBg end
         if ctx.SpSortStr then ctx.SpSortStr.Color = t.Stroke end
+        if searchHolder and searchStroke then
+            searchHolder.BackgroundColor3 = t.BoxBg
+            searchStroke.Color = t.Stroke
+        end
 
         for i = 1, #ctx.Tabs do setCatVis(i, false) end
         for bName in pairs(ctx.ThemeButtons) do setThmVis(n, bName, false) end
@@ -440,6 +624,40 @@ function Window:Create(lib, config)
         if sharedState.isOpn then closeUi() else openUi() end
     end))
 
+    if enableSearch and searchInp then
+        table.insert(ctx.Connections, searchInp:GetPropertyChangedSignal("Text"):Connect(function()
+            filterSearch(searchInp.Text)
+        end))
+
+        table.insert(ctx.Connections, searchInp.FocusLost:Connect(function()
+            filterSearch(searchInp.Text)
+            Animations:Tween(searchStroke, Animations.Fast, {
+                Color = ctx.ActiveTheme.Stroke,
+                Transparency = 0.45
+            })
+            Animations:Tween(searchHolder, Animations.Fast, {
+                BackgroundTransparency = 0.30
+            })
+        end))
+
+        table.insert(ctx.Connections, searchInp.Focused:Connect(function()
+            Animations:Tween(searchStroke, Animations.Fast, {
+                Color = ctx.ActiveTheme.Accent,
+                Transparency = 0.15
+            })
+            Animations:Tween(searchHolder, Animations.Fast, {
+                BackgroundTransparency = 0.18
+            })
+        end))
+
+        if clearBtn then
+            table.insert(ctx.Connections, clearBtn.MouseButton1Click:Connect(function()
+                searchInp.Text = ""
+                filterSearch("")
+            end))
+        end
+    end
+
     -- ==========================================================================
     -- PUBLIC WINDOW OBJECT API
     -- ==========================================================================
@@ -447,8 +665,28 @@ function Window:Create(lib, config)
         Context = ctx,
         ScreenGui = mainUI,
         MainFrame = frm,
-        ToggleOrb = tglBtn
+        ToggleOrb = tglBtn,
+        SearchBar = searchHolder,
+        SearchInput = searchInp
     }
+
+    function WinObj:SetSearch(query)
+        if searchInp then
+            searchInp.Text = tostring(query or "")
+            filterSearch(searchInp.Text)
+        end
+    end
+
+    function WinObj:ClearSearch()
+        if searchInp then
+            searchInp.Text = ""
+            filterSearch("")
+        end
+    end
+
+    function WinObj:GetSearch()
+        return (searchInp and searchInp.Text) or ""
+    end
 
     function WinObj:GetActiveTheme()
         return ctx.ActiveTheme

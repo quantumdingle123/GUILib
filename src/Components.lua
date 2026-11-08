@@ -144,8 +144,27 @@ function Components:CreateCategory(ctx, title, parent, order, defaultOpen)
     local CategoryObj = {
         Container = content,
         Frame = frame,
+        Title = tostring(title or "Category"),
+        DefaultOpen = defaultOpen or false,
         NextOrder = 0
     }
+
+    function CategoryObj:SetOpen(state)
+        if isOpen == state then return end
+        isOpen = state
+        updateSize()
+    end
+
+    function CategoryObj:IsOpen()
+        return isOpen
+    end
+
+    function CategoryObj:UpdateSize()
+        updateSize()
+    end
+
+    if not ctx.Categories then ctx.Categories = {} end
+    table.insert(ctx.Categories, CategoryObj)
 
     local function nextOrder(explicitOrder)
         if explicitOrder then
@@ -159,7 +178,60 @@ function Components:CreateCategory(ctx, title, parent, order, defaultOpen)
     end
 
     function CategoryObj:CreateToggle(tTitle, desc, defaultState, callback, explicitOrder)
-        
+        local item = Components:CreateToggle(ctx, tTitle, desc, defaultState, content, nextOrder(explicitOrder), callback)
+        if ctx.RegisterSearchItem then ctx:RegisterSearchItem(tTitle, desc, item, CategoryObj) end
+        return item
+    end
+
+    function CategoryObj:CreateSlider(sTitle, desc, min, max, defaultVal, increment, callback, explicitOrder)
+        local item = Components:CreateSlider(ctx, sTitle, desc, min, max, defaultVal, increment, content, nextOrder(explicitOrder), callback)
+        if ctx.RegisterSearchItem then ctx:RegisterSearchItem(sTitle, desc, item, CategoryObj) end
+        return item
+    end
+
+    function CategoryObj:CreateDropdown(dTitle, desc, items, defaultVal, callback, explicitOrder)
+        local item = Components:CreateDropdown(ctx, dTitle, desc, items, defaultVal, content, nextOrder(explicitOrder), callback)
+        if ctx.RegisterSearchItem then ctx:RegisterSearchItem(dTitle, desc, item, CategoryObj) end
+        return item
+    end
+
+    function CategoryObj:CreateMultiDropdown(dTitle, desc, items, defaultMap, callback, explicitOrder)
+        local item = Components:CreateMultiDropdown(ctx, dTitle, desc, items, defaultMap, content, nextOrder(explicitOrder), callback)
+        if ctx.RegisterSearchItem then ctx:RegisterSearchItem(dTitle, desc, item, CategoryObj) end
+        return item
+    end
+
+    function CategoryObj:CreateButton(bTitle, desc, btnText, callback, explicitOrder)
+        local item = Components:CreateButton(ctx, bTitle, desc, btnText, content, nextOrder(explicitOrder), callback)
+        if ctx.RegisterSearchItem then ctx:RegisterSearchItem(bTitle, desc, item, CategoryObj) end
+        return item
+    end
+
+    function CategoryObj:CreateTextbox(tbTitle, desc, placeholder, defaultText, callback, explicitOrder)
+        local item = Components:CreateTextbox(ctx, tbTitle, desc, placeholder, defaultText, content, nextOrder(explicitOrder), callback)
+        if ctx.RegisterSearchItem then ctx:RegisterSearchItem(tbTitle, desc, item, CategoryObj) end
+        return item
+    end
+
+    function CategoryObj:CreateLabel(text, explicitOrder)
+        local item = Components:CreateLabel(ctx, text, content, nextOrder(explicitOrder))
+        if ctx.RegisterSearchItem then ctx:RegisterSearchItem(text, "", item, CategoryObj) end
+        return item
+    end
+
+    function CategoryObj:CreateSeparator(explicitOrder)
+        return Components:CreateSeparator(ctx, content, nextOrder(explicitOrder))
+    end
+
+    function CategoryObj:CreateKeybind(kbTitle, desc, defaultKey, callback, explicitOrder)
+        local item = Components:CreateKeybind(ctx, kbTitle, desc, defaultKey, content, nextOrder(explicitOrder), callback)
+        if ctx.RegisterSearchItem then ctx:RegisterSearchItem(kbTitle, desc, item, CategoryObj) end
+        return item
+    end
+
+    return CategoryObj, content
+end
+
 local KEY_DISPLAY_NAMES = {
     [Enum.KeyCode.RightControl] = "RCtrl",
     [Enum.KeyCode.LeftControl] = "LCtrl",
@@ -412,44 +484,6 @@ function Components:CreateKeybind(ctx, title, desc, defaultKey, parent, order, c
             callback = fn
         end
     }
-end
-
-return Components:CreateToggle(ctx, tTitle, desc, defaultState, content, nextOrder(explicitOrder), callback)
-    end
-
-    function CategoryObj:CreateSlider(sTitle, desc, min, max, defaultVal, increment, callback, explicitOrder)
-        return Components:CreateSlider(ctx, sTitle, desc, min, max, defaultVal, increment, content, nextOrder(explicitOrder), callback)
-    end
-
-    function CategoryObj:CreateDropdown(dTitle, desc, items, defaultVal, callback, explicitOrder)
-        return Components:CreateDropdown(ctx, dTitle, desc, items, defaultVal, content, nextOrder(explicitOrder), callback)
-    end
-
-    function CategoryObj:CreateMultiDropdown(dTitle, desc, items, defaultMap, callback, explicitOrder)
-        return Components:CreateMultiDropdown(ctx, dTitle, desc, items, defaultMap, content, nextOrder(explicitOrder), callback)
-    end
-
-    function CategoryObj:CreateButton(bTitle, desc, btnText, callback, explicitOrder)
-        return Components:CreateButton(ctx, bTitle, desc, btnText, content, nextOrder(explicitOrder), callback)
-    end
-
-    function CategoryObj:CreateTextbox(tbTitle, desc, placeholder, defaultText, callback, explicitOrder)
-        return Components:CreateTextbox(ctx, tbTitle, desc, placeholder, defaultText, content, nextOrder(explicitOrder), callback)
-    end
-
-    function CategoryObj:CreateLabel(text, explicitOrder)
-        return Components:CreateLabel(ctx, text, content, nextOrder(explicitOrder))
-    end
-
-    function CategoryObj:CreateSeparator(explicitOrder)
-        return Components:CreateSeparator(ctx, content, nextOrder(explicitOrder))
-    end
-
-    function CategoryObj:CreateKeybind(kbTitle, desc, defaultKey, callback, explicitOrder)
-        return Components:CreateKeybind(ctx, kbTitle, desc, defaultKey, content, nextOrder(explicitOrder), callback)
-    end
-
-    return CategoryObj, content
 end
 
 function Components:CreateToggle(ctx, title, desc, defaultState, parent, order, callback)

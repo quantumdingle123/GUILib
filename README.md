@@ -1,6 +1,14 @@
-# Syntaxis GUI Library (`SyntaxisLib`) v2.1.0
+# Syntaxis GUI Library (`SyntaxisLib`) v2.2.0
 
 A modular, reusable iOS / Liquid Glass UI library for Roblox Luau scripts. Designed to separate visual architecture, component rendering, animations, tactile button interactions, and theme state from main automation scripts.
+
+---
+
+## What's New in v2.2.0
+
+- 🔍 **Default Header Search Bar**: Automatically appears in the window top bar with zero extra configuration. Filters all component cards across categories in real time, auto-expands matching categories, and includes smooth clear (`✕`) functionality.
+- 🛡️ **Anti-Cheat Camouflage**: ScreenGui instances are protected against anti-cheat scanners using `syn.protect_gui` / `protectgui` / `gethui()` and randomized anonymous instance names (e.g. `G_a3f8c12b`). Existing instances are safely tracked and destroyed on script re-execution.
+- ⌨️ **Tactile Keybind Controls**: Category keybind badges with listening state (`[ ... ]`), energetic iOS spring confirmation (`1.08x` $\rightarrow$ `1.0x`), `Escape` unbinding, and real-time physical keypress reflection during gameplay.
 
 ---
 
@@ -117,6 +125,9 @@ Window:Initialize()
 | `Window:CreatePriorityTab(name, title, opts)` | Dynamic reorderable task priority list | `:Render()` |
 | `Window:CreateStealPanelTab(name, title, opts)` | Dynamic sortable item scanner panel | `:Render()` |
 | `Window:CreateSettingsTab(name, title, opts)` | Built-in theme selector & transparency slider | `Page`, `Index` |
+| `Window:SetSearch(query)` | Programmatically filters component cards by query string | — |
+| `Window:ClearSearch()` | Resets the search bar and restores all cards | — |
+| `Window:GetSearch()` | Returns the active search query text | `string` |
 | `Window:ShowWarningModal(title, text)` | Displays an iOS alert modal | — |
 | `Window:ShowDiscordModal(inviteUrl)` | Displays the Discord community modal | — |
 | `Window:Notify({ Title, Content, Duration })` | Displays a bottom-right toast notification | — |

@@ -4,7 +4,7 @@
 -- ==============================================================================
 
 local SyntaxisLib = {
-    Version = "2.1.0",
+    Version = "2.2.0",
     RepoBaseUrl = "https://raw.githubusercontent.com/quantumdingle123/GUILib/main/src/"
 }
 

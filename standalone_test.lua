@@ -1,8 +1,8 @@
 -- ==============================================================================
--- [ SYNTAXIS GUI LIBRARY v2.0.0 - STANDALONE VERIFICATION & DEMO SCRIPT ]
--- Repository: https://github.com/tenobarillas-ship-it/Testing
+-- [ SYNTAXIS GUI LIBRARY v2.2.0 - STANDALONE VERIFICATION & DEMO SCRIPT ]
+-- Repository: https://github.com/quantumdingle123/GUILib
 -- Purpose: Standalone test environment verifying all modules, components,
---          callbacks, themes, floating dropdowns, dynamic panels, and cleanup.
+--          Search Bar, Keybinds, callbacks, themes, floating dropdowns, and cleanup.
 -- ==============================================================================
 
 local SyntaxisLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/quantumdingle123/GUILib/main/SyntaxisLib.lua"))()
