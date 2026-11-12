@@ -259,7 +259,13 @@ function Utils:GetSafeParent()
     if not safeContainer then
         pcall(function()
             local cg = game:GetService("CoreGui")
-            if cg and typeof(cg) == "Instance" then safeContainer = cg end
+            if cg and typeof(cg) == "Instance" then
+                -- Test write access to avoid Studio Play mode security errors (identity 2)
+                local test = Instance.new("Folder")
+                test.Parent = cg
+                test:Destroy()
+                safeContainer = cg
+            end
         end)
     end
     if not safeContainer then
