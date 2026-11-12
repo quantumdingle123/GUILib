@@ -2496,7 +2496,7 @@ function Window:Create(lib, config)
     if rawGuiName then
         mainUI.Name = rawGuiName
     elseif isCamouflage then
-        local randId = string.format("%08x", math.random(0, 0xFFFFFFFF))
+        local randId = string.format("%08x", math.random(0x10000000, 0x7FFFFFFF))
         mainUI.Name = "G_" .. randId
     else
         mainUI.Name = "SyntaxHubGUI"
