@@ -3,6 +3,8 @@
 -- Manages Window lifecycle, Sidebar tabs, Theme engine, Transparency engine, and Cleanup.
 -- ==============================================================================
 
+local RunService = game:GetService("RunService")
+
 local Window = {}
 
 function Window:Create(lib, config)
@@ -153,7 +155,7 @@ function Window:Create(lib, config)
     topTxt.Text = tostring(config.Title or "Syntaxis")
     topTxt.Active = false
 
-    local searchHolder, searchStroke, searchInp, clearBtn
+    local searchHolder, searchStroke, searchInp, clearBtn, clearBarA, clearBarB
     if enableSearch then
         searchHolder = Instance.new("Frame", topBar)
         searchHolder.Name = "SearchBar"
@@ -197,6 +199,7 @@ function Window:Create(lib, config)
         searchInp.Text = ""
         searchInp.ClearTextOnFocus = false
         searchInp.TextXAlignment = Enum.TextXAlignment.Left
+        searchInp.ClipsDescendants = true
         searchInp.Active = true
         searchInp.ZIndex = 6
 
@@ -204,15 +207,39 @@ function Window:Create(lib, config)
         clearBtn.Name = "ClearBtn"
         clearBtn.Size = UDim2.new(0, 18, 0, 18)
         clearBtn.AnchorPoint = Vector2.new(1, 0.5)
-        clearBtn.Position = UDim2.new(1, -5, 0.5, 0)
+        clearBtn.Position = UDim2.new(1, -4, 0.5, 0)
+        clearBtn.BackgroundColor3 = activeTheme.SwitchOff or activeTheme.BoxBg
         clearBtn.BackgroundTransparency = 1
-        clearBtn.Font = Enum.Font.GothamBold
-        clearBtn.TextSize = 11
-        clearBtn.TextColor3 = Color3.fromRGB(180, 200, 230)
-        clearBtn.Text = "✕"
+        clearBtn.AutoButtonColor = false
+        clearBtn.Text = ""
         clearBtn.Visible = false
         clearBtn.Active = true
         clearBtn.ZIndex = 7
+        Utils:RoundCorner(clearBtn, 999)
+
+        clearBarA = Instance.new("Frame", clearBtn)
+        clearBarA.Name = "BarA"
+        clearBarA.AnchorPoint = Vector2.new(0.5, 0.5)
+        clearBarA.Position = UDim2.new(0.5, 0, 0.5, 0)
+        clearBarA.Size = UDim2.new(0, 9, 0, 2)
+        clearBarA.Rotation = 45
+        clearBarA.BackgroundColor3 = activeTheme.SubText
+        clearBarA.BackgroundTransparency = 0.05
+        clearBarA.BorderSizePixel = 0
+        clearBarA.ZIndex = 8
+        Utils:RoundCorner(clearBarA, 999)
+
+        clearBarB = Instance.new("Frame", clearBtn)
+        clearBarB.Name = "BarB"
+        clearBarB.AnchorPoint = Vector2.new(0.5, 0.5)
+        clearBarB.Position = UDim2.new(0.5, 0, 0.5, 0)
+        clearBarB.Size = UDim2.new(0, 9, 0, 2)
+        clearBarB.Rotation = -45
+        clearBarB.BackgroundColor3 = activeTheme.SubText
+        clearBarB.BackgroundTransparency = 0.05
+        clearBarB.BorderSizePixel = 0
+        clearBarB.ZIndex = 8
+        Utils:RoundCorner(clearBarB, 999)
     end
 
     local tglBtn = Instance.new("ImageButton", mainUI)
@@ -222,7 +249,7 @@ function Window:Create(lib, config)
     tglBtn.BackgroundColor3 = Color3.fromRGB(32, 60, 110)
     tglBtn.BackgroundTransparency = 0.12
     tglBtn.BorderSizePixel = 0
-    tglBtn.Image = config.Icon or "rbxthumb://type=Asset&id=73878877741609&w=150&h=150"
+    tglBtn.Image = config.Icon or "rbxassetid://71471996876777"
     tglBtn.AutoButtonColor = false
     Utils:RoundCorner(tglBtn, 999)
     Animations:AttachTactile(tglBtn, ctx.Connections)
@@ -313,6 +340,12 @@ function Window:Create(lib, config)
     Utils:MakeDraggable(tglBtn, tglBtn, ctx.Connections)
 
     local sldrUI = {}
+    local currentTransPct = 0
+    local transFmt = Utils:CreateNumericFormatter(0, 100, 1, "%", {
+        TextSize = 12,
+        Weight = Enum.FontWeight.SemiBold,
+        Padding = 4
+    })
     local prevGrad, prevStr, prevTxt
 
     local function setCatVis(idx, hov)
@@ -347,16 +380,54 @@ function Window:Create(lib, config)
         local d = ctx.ThemeButtons[bName]
         if not d or not thm then return end
         local isSel = (sName == bName)
-        d.Button.TextColor3 = Color3.new(1, 1, 1)
-        d.Tint.BackgroundTransparency = (isSel or hov) and 0.28 or 0.68
-        d.Gradient.Color = ColorSequence.new{
-            ColorSequenceKeypoint.new(0, thm.Accent),
-            ColorSequenceKeypoint.new(1, thm.Accent2)
-        }
-        d.Stroke.Color = isSel and Color3.fromRGB(255, 255, 255) or thm.Accent
-        d.Stroke.Transparency = isSel and 0.10 or 0.35
-        d.DotStroke.Color = isSel and Color3.fromRGB(255, 255, 255) or thm.Accent
-        d.Tint.BackgroundColor3 = thm.Main.Keypoints[#thm.Main.Keypoints].Value
+
+        d.BarFill.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        d.BarFill.BackgroundTransparency = 0
+        d.Gradient.Rotation = thm.IsRainbow and 0 or 135
+        d.Gradient.Color = thm.Preview or thm.Main
+        d.Label.TextColor3 = Color3.new(1, 1, 1)
+        d.Label.Font = isSel and Enum.Font.GothamBold or Enum.Font.GothamSemibold
+
+        if isSel then
+            Animations:Tween(d.Stroke, Animations.Fast, {
+                Color = Color3.fromRGB(255, 255, 255),
+                Thickness = 2,
+                Transparency = 0
+            })
+            Animations:Tween(d.SelectedStripe, Animations.Fast, {
+                Size = UDim2.new(0, 3, 0, 16),
+                BackgroundTransparency = 0
+            })
+            Animations:Tween(d.Label, Animations.Fast, {
+                Position = UDim2.new(0, 17, 0, 0)
+            })
+        elseif hov then
+            Animations:Tween(d.Stroke, Animations.Fast, {
+                Color = thm.GlassRim or Color3.fromRGB(255, 255, 255),
+                Thickness = 1.4,
+                Transparency = 0.18
+            })
+            Animations:Tween(d.SelectedStripe, Animations.Fast, {
+                Size = UDim2.new(0, 0, 0, 12),
+                BackgroundTransparency = 1
+            })
+            Animations:Tween(d.Label, Animations.Fast, {
+                Position = UDim2.new(0, 15, 0, 0)
+            })
+        else
+            Animations:Tween(d.Stroke, Animations.Fast, {
+                Color = thm.Stroke,
+                Thickness = 1,
+                Transparency = 0.42
+            })
+            Animations:Tween(d.SelectedStripe, Animations.Fast, {
+                Size = UDim2.new(0, 0, 0, 12),
+                BackgroundTransparency = 1
+            })
+            Animations:Tween(d.Label, Animations.Fast, {
+                Position = UDim2.new(0, 12, 0, 0)
+            })
+        end
     end
 
     local function swapCat(idx)
@@ -471,8 +542,9 @@ function Window:Create(lib, config)
     local function applyTrans(val)
         val = math.clamp(tonumber(val) or 0, 0, 100)
         local a = val / 100
-        if sldrUI.Txt then
-            sldrUI.Txt.Text = "Transparency: " .. math.floor(val) .. "%"
+        currentTransPct = math.clamp(math.floor(val + 0.5), 0, 100)
+        if sldrUI.ValTxt then
+            sldrUI.ValTxt.Text = transFmt.Format(currentTransPct)
             sldrUI.Fil.Size = UDim2.new(a, 0, 1, 0)
             sldrUI.Kn.Position = UDim2.new(a, -8, 0.5, -8)
         end
@@ -500,13 +572,9 @@ function Window:Create(lib, config)
         for _, child in ipairs(frm:GetDescendants()) do doT(child) end
     end
 
-    local function loadTheme(n)
-        local t = Themes.Palettes[n]
-        if not t then
-            t = Themes.Palettes.Sapphire
-            n = "Sapphire"
-        end
-        sharedState.themeName = n
+    local rainbowConn = nil
+
+    local function applyThemeVisuals(t, isLiveTick, displayName)
         ctx.ActiveTheme = t
 
         topTxt.TextColor3 = Color3.new(1, 1, 1)
@@ -528,6 +596,7 @@ function Window:Create(lib, config)
 
         if sldrUI.Txt then
             sldrUI.Txt.TextColor3 = Color3.new(1, 1, 1)
+            if sldrUI.ValTxt then sldrUI.ValTxt.TextColor3 = t.Accent2 end
             sldrUI.Grad.Color = t.Topbar
             sldrUI.Str.Color = t.Stroke
             sldrUI.Trk.BackgroundColor3 = t.SwitchOff
@@ -536,12 +605,11 @@ function Window:Create(lib, config)
         end
         if prevTxt then
             prevTxt.TextColor3 = Color3.new(1, 1, 1)
-            prevGrad.Color = ColorSequence.new{
-                ColorSequenceKeypoint.new(0, t.Accent),
-                ColorSequenceKeypoint.new(1, t.Accent2)
-            }
-            prevStr.Color = t.Accent2
-            prevTxt.Text = "Current Theme: " .. (t.Name or n)
+            prevGrad.Color = t.Preview or t.Main
+            prevStr.Color = t.Accent
+            if not isLiveTick then
+                prevTxt.Text = "Current Theme: " .. (t.Name or displayName or "Sapphire")
+            end
         end
         if ctx.SpSortBtn then ctx.SpSortBtn.BackgroundColor3 = t.BoxBg end
         if ctx.SpSortStr then ctx.SpSortStr.Color = t.Stroke end
@@ -549,11 +617,51 @@ function Window:Create(lib, config)
             searchHolder.BackgroundColor3 = t.BoxBg
             searchStroke.Color = t.Stroke
         end
+        if clearBtn then
+            clearBtn.BackgroundColor3 = t.SwitchOff or t.BoxBg
+            if clearBarA then clearBarA.BackgroundColor3 = t.SubText end
+            if clearBarB then clearBarB.BackgroundColor3 = t.SubText end
+        end
 
         for i = 1, #ctx.Tabs do setCatVis(i, false) end
+        for _, subFn in ipairs(sharedState.themeSubscribers) do pcall(subFn, t, isLiveTick) end
+    end
+
+    local function loadTheme(n)
+        if rainbowConn then
+            rainbowConn:Disconnect()
+            rainbowConn = nil
+        end
+
+        local t = Themes.Palettes[n]
+        if not t then
+            t = Themes.Palettes.Sapphire
+            n = "Sapphire"
+        end
+        sharedState.themeName = n
+
+        local initialTheme = t.IsRainbow and Themes:GetRainbowSnapshot(os.clock() * 0.16) or t
+        applyThemeVisuals(initialTheme, false, n)
         for bName in pairs(ctx.ThemeButtons) do setThmVis(n, bName, false) end
-        for _, subFn in ipairs(sharedState.themeSubscribers) do pcall(subFn, t) end
-        if config.OnThemeChanged then pcall(config.OnThemeChanged, n, t) end
+        if config.OnThemeChanged then pcall(config.OnThemeChanged, n, initialTheme) end
+
+        if t.IsRainbow then
+            local lastTick = 0
+            rainbowConn = RunService.Heartbeat:Connect(function()
+                if not ctx.IsAlive or sharedState.themeName ~= n then
+                    if rainbowConn then
+                        rainbowConn:Disconnect()
+                        rainbowConn = nil
+                    end
+                    return
+                end
+                if not frm.Visible then return end
+                local now = os.clock()
+                if now - lastTick < 0.04 then return end
+                lastTick = now
+                applyThemeVisuals(Themes:GetRainbowSnapshot(now * 0.16), true, n)
+            end)
+        end
     end
 
     local function registerSidebarButton(tabData, idx)
@@ -651,6 +759,38 @@ function Window:Create(lib, config)
         end))
 
         if clearBtn then
+            table.insert(ctx.Connections, clearBtn.MouseEnter:Connect(function()
+                Animations:Tween(clearBtn, Animations.Fast, { BackgroundTransparency = 0.35 })
+                if clearBarA then
+                    Animations:Tween(clearBarA, Animations.Fast, {
+                        BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+                        BackgroundTransparency = 0
+                    })
+                end
+                if clearBarB then
+                    Animations:Tween(clearBarB, Animations.Fast, {
+                        BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+                        BackgroundTransparency = 0
+                    })
+                end
+            end))
+
+            table.insert(ctx.Connections, clearBtn.MouseLeave:Connect(function()
+                Animations:Tween(clearBtn, Animations.Fast, { BackgroundTransparency = 1 })
+                if clearBarA then
+                    Animations:Tween(clearBarA, Animations.Fast, {
+                        BackgroundColor3 = ctx.ActiveTheme.SubText,
+                        BackgroundTransparency = 0.05
+                    })
+                end
+                if clearBarB then
+                    Animations:Tween(clearBarB, Animations.Fast, {
+                        BackgroundColor3 = ctx.ActiveTheme.SubText,
+                        BackgroundTransparency = 0.05
+                    })
+                end
+            end))
+
             table.insert(ctx.Connections, clearBtn.MouseButton1Click:Connect(function()
                 searchInp.Text = ""
                 filterSearch("")
@@ -852,9 +992,15 @@ function Window:Create(lib, config)
         thmScrl.CanvasSize = UDim2.new(0, 0, 0, 0)
         thmScrl.AutomaticCanvasSize = Enum.AutomaticSize.Y
 
+        local thmPad = Instance.new("UIPadding", thmScrl)
+        thmPad.PaddingTop = UDim.new(0, 3)
+        thmPad.PaddingBottom = UDim.new(0, 3)
+        thmPad.PaddingLeft = UDim.new(0, 3)
+        thmPad.PaddingRight = UDim.new(0, 5)
+
         local thmGrid = Instance.new("UIGridLayout", thmScrl)
-        thmGrid.CellPadding = UDim2.new(0, 6, 0, 6)
-        thmGrid.CellSize = UDim2.new(0.5, -3, 0, 34)
+        thmGrid.CellPadding = UDim2.new(0, 8, 0, 6)
+        thmGrid.CellSize = UDim2.new(0.5, -4, 0, 29)
         thmGrid.SortOrder = Enum.SortOrder.LayoutOrder
 
         sldrUI.Bg = Instance.new("Frame", setPg)
@@ -872,12 +1018,25 @@ function Window:Create(lib, config)
         sldrUI.Txt = Instance.new("TextLabel", sldrUI.Bg)
         sldrUI.Txt.BackgroundTransparency = 1
         sldrUI.Txt.Position = UDim2.new(0, 10, 0, 4)
-        sldrUI.Txt.Size = UDim2.new(1, -20, 0, 15)
+        sldrUI.Txt.Size = UDim2.new(1, -(transFmt.ReservedWidth + 28), 0, 15)
         sldrUI.Txt.Font = Enum.Font.GothamMedium
         sldrUI.Txt.TextSize = 12
         sldrUI.Txt.TextColor3 = Color3.fromRGB(255, 255, 255)
         sldrUI.Txt.TextXAlignment = Enum.TextXAlignment.Left
-        sldrUI.Txt.Text = "Transparency: 0%"
+        sldrUI.Txt.TextTruncate = Enum.TextTruncate.AtEnd
+        sldrUI.Txt.Text = "Transparency"
+
+        sldrUI.ValTxt = Instance.new("TextLabel", sldrUI.Bg)
+        sldrUI.ValTxt.Name = "TransparencyValue"
+        sldrUI.ValTxt.BackgroundTransparency = 1
+        sldrUI.ValTxt.AnchorPoint = Vector2.new(1, 0)
+        sldrUI.ValTxt.Position = UDim2.new(1, -10, 0, 4)
+        sldrUI.ValTxt.Size = UDim2.new(0, transFmt.ReservedWidth, 0, 15)
+        sldrUI.ValTxt.TextSize = 12
+        sldrUI.ValTxt.TextColor3 = Color3.fromRGB(255, 255, 255)
+        sldrUI.ValTxt.TextXAlignment = Enum.TextXAlignment.Right
+        Utils:ApplyTabularFont(sldrUI.ValTxt, Enum.FontWeight.SemiBold)
+        sldrUI.ValTxt.Text = transFmt.Format(currentTransPct)
 
         sldrUI.Trk = Instance.new("Frame", sldrUI.Bg)
         sldrUI.Trk.BackgroundColor3 = Color3.fromRGB(24, 34, 54)
@@ -899,12 +1058,25 @@ function Window:Create(lib, config)
         sldrUI.Kn.BorderSizePixel = 0
         sldrUI.Kn.Size = UDim2.new(0, 16, 0, 16)
         sldrUI.Kn.Position = UDim2.new(0, -8, 0.5, -8)
+        sldrUI.Kn.ZIndex = 3
         sldrUI.Kn:SetAttribute("NoTrans", true)
         Utils:RoundCorner(sldrUI.Kn, 999)
 
+        sldrUI.HitZone = Instance.new("TextButton", sldrUI.Trk)
+        sldrUI.HitZone.Name = "HitZone"
+        sldrUI.HitZone.Text = ""
+        sldrUI.HitZone.AutoButtonColor = false
+        sldrUI.HitZone.BackgroundTransparency = 1
+        sldrUI.HitZone.BorderSizePixel = 0
+        sldrUI.HitZone.AnchorPoint = Vector2.new(0.5, 0.5)
+        sldrUI.HitZone.Position = UDim2.new(0.5, 0, 0.5, 0)
+        sldrUI.HitZone.Size = UDim2.new(1, 16, 0, 22)
+        sldrUI.HitZone.ZIndex = 2
+        sldrUI.HitZone:SetAttribute("NoTrans", true)
+
         local prevBox = Instance.new("Frame", setPg)
         prevBox.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-        prevBox.BackgroundTransparency = 0.22
+        prevBox.BackgroundTransparency = 0.08
         prevBox.Position = UDim2.new(0, 0, 1, -36)
         prevBox.Size = UDim2.new(1, 0, 0, 34)
         prevBox.BorderSizePixel = 0
@@ -912,68 +1084,90 @@ function Window:Create(lib, config)
         prevGrad = Utils:MakeGradient(prevBox, 135)
         prevStr = Instance.new("UIStroke", prevBox)
         prevStr.Thickness = 1
-        prevStr.Transparency = 0.40
+        prevStr.Transparency = 0.30
 
         prevTxt = Instance.new("TextLabel", prevBox)
         prevTxt.BackgroundTransparency = 1
-        prevTxt.Position = UDim2.new(0, 10, 0, 0)
-        prevTxt.Size = UDim2.new(1, -20, 1, 0)
-        prevTxt.Font = Enum.Font.GothamMedium
-        prevTxt.TextSize = 12.5
+        prevTxt.Position = UDim2.new(0, 12, 0, 0)
+        prevTxt.Size = UDim2.new(1, -24, 1, 0)
+        prevTxt.Font = Enum.Font.GothamSemibold
+        prevTxt.TextSize = 12
         prevTxt.TextColor3 = Color3.fromRGB(255, 255, 255)
         prevTxt.TextXAlignment = Enum.TextXAlignment.Left
         prevTxt.Text = "Current Theme: " .. tostring(sharedState.themeName)
 
-        for n, td in pairs(Themes.Palettes) do
+        local orderedThemes = Themes.GetOrderedNames and Themes:GetOrderedNames() or {}
+        if #orderedThemes == 0 then
+            for name in pairs(Themes.Palettes) do table.insert(orderedThemes, name) end
+        end
+
+        for orderIdx, n in ipairs(orderedThemes) do
+            local td = Themes.Palettes[n]
             local btn = Instance.new("TextButton", thmScrl)
             btn.Name = n .. "Button"
-            btn.Text = n
-            btn.Font = Enum.Font.GothamSemibold
-            btn.TextSize = 12
+            btn.Text = ""
+            btn.BackgroundTransparency = 1
             btn.AutoButtonColor = false
             btn.BorderSizePixel = 0
-            btn.TextXAlignment = Enum.TextXAlignment.Left
-            btn:SetAttribute("NoTrans", true)
-            Utils:RoundCorner(btn, 10)
+            btn.LayoutOrder = td.Order or orderIdx
 
-            local pad = Instance.new("UIPadding", btn)
-            pad.PaddingLeft = UDim.new(0, 34)
+            local barFill = Instance.new("Frame", btn)
+            barFill.Name = "BarFill"
+            barFill.Size = UDim2.new(1, 0, 1, 0)
+            barFill.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+            barFill.BackgroundTransparency = 0
+            barFill.BorderSizePixel = 0
+            barFill.ZIndex = 2
+            barFill:SetAttribute("NoTrans", true)
+            Utils:RoundCorner(barFill, 10)
 
-            local tint = Instance.new("Frame", btn)
-            tint.Size = UDim2.new(1, 0, 1, 0)
-            tint.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-            tint.BackgroundTransparency = 0.72
-            tint.BorderSizePixel = 0
-            tint:SetAttribute("NoTrans", true)
-            Utils:RoundCorner(tint, 10)
+            local g = Utils:MakeGradient(barFill, td.IsRainbow and 0 or 135)
+            g.Color = td.Preview or td.Main
 
-            local d = Instance.new("Frame", btn)
-            d.Size = UDim2.new(0, 12, 0, 12)
-            d.Position = UDim2.new(0, -22, 0.5, -6)
-            d.BackgroundColor3 = td.Accent
-            d.BorderSizePixel = 0
-            d:SetAttribute("NoTrans", true)
-            Utils:RoundCorner(d, 999)
-
-            local ds = Instance.new("UIStroke", d)
-            ds.Color = Color3.fromRGB(255, 255, 255)
-            ds.Thickness = 1.2
-            ds.Transparency = 0.20
-
-            local g = Utils:MakeGradient(btn, 135)
-            local s = Instance.new("UIStroke", btn)
+            local s = Instance.new("UIStroke", barFill)
             s.Thickness = 1
-            s.Transparency = 0.40
+            s.Color = td.Stroke
+            s.Transparency = 0.42
 
-            ctx.ThemeButtons[n] = { Button = btn, Gradient = g, Stroke = s, Padding = pad, DotStroke = ds, Tint = tint }
+            local selStripe = Instance.new("Frame", btn)
+            selStripe.Name = "SelectedStripe"
+            selStripe.AnchorPoint = Vector2.new(0, 0.5)
+            selStripe.Position = UDim2.new(0, 8, 0.5, 0)
+            selStripe.Size = UDim2.new(0, 0, 0, 12)
+            selStripe.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+            selStripe.BackgroundTransparency = 1
+            selStripe.BorderSizePixel = 0
+            selStripe.ZIndex = 4
+            selStripe:SetAttribute("NoTrans", true)
+            Utils:RoundCorner(selStripe, 999)
+
+            local lbl = Instance.new("TextLabel", btn)
+            lbl.Name = "ThemeLabel"
+            lbl.BackgroundTransparency = 1
+            lbl.Position = UDim2.new(0, 12, 0, 0)
+            lbl.Size = UDim2.new(1, -22, 1, 0)
+            lbl.Font = Enum.Font.GothamSemibold
+            lbl.TextSize = 12
+            lbl.TextColor3 = Color3.fromRGB(255, 255, 255)
+            lbl.TextXAlignment = Enum.TextXAlignment.Left
+            lbl.TextTruncate = Enum.TextTruncate.AtEnd
+            lbl.Text = n
+            lbl.ZIndex = 4
+
+            ctx.ThemeButtons[n] = {
+                Button = btn,
+                BarFill = barFill,
+                Gradient = g,
+                Stroke = s,
+                SelectedStripe = selStripe,
+                Label = lbl
+            }
 
             table.insert(ctx.Connections, btn.MouseEnter:Connect(function()
                 setThmVis(sharedState.themeName, n, true)
-                Animations:Tween(pad, Animations.Fast, { PaddingLeft = UDim.new(0, 38) })
             end))
             table.insert(ctx.Connections, btn.MouseLeave:Connect(function()
                 setThmVis(sharedState.themeName, n, false)
-                Animations:Tween(pad, Animations.Fast, { PaddingLeft = UDim.new(0, 34) })
             end))
             table.insert(ctx.Connections, btn.MouseButton1Click:Connect(function()
                 loadTheme(n)
@@ -988,27 +1182,19 @@ function Window:Create(lib, config)
             end))
         end
 
-        table.insert(ctx.Connections, sldrUI.Trk.InputBegan:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                local function update(pos)
-                    local relX = math.clamp(pos.X - sldrUI.Trk.AbsolutePosition.X, 0, sldrUI.Trk.AbsoluteSize.X)
-                    local pct = (relX / math.max(sldrUI.Trk.AbsoluteSize.X, 1)) * 100
-                    applyTrans(pct)
-                end
-                update(input.Position)
-                local conn
-                conn = input.Changed:Connect(function()
-                    if input.UserInputState == Enum.UserInputState.Change then
-                        update(input.Position)
-                    elseif input.UserInputState == Enum.UserInputState.End then
-                        local finalTrans = math.clamp(tonumber(string.match(sldrUI.Txt.Text, "%d+")) or 0, 0, 100)
-                        if opts.OnTransparencyChanged then opts.OnTransparencyChanged(finalTrans) end
-                        if conn then conn:Disconnect() end
-                    end
-                end)
-                table.insert(ctx.Connections, conn)
+        Utils:BindSliderDrag(
+            { sldrUI.HitZone, sldrUI.Kn, sldrUI.Trk },
+            sldrUI.Trk,
+            ctx.Connections,
+            function(pos)
+                local relX = math.clamp(pos.X - sldrUI.Trk.AbsolutePosition.X, 0, sldrUI.Trk.AbsoluteSize.X)
+                local pct = (relX / math.max(sldrUI.Trk.AbsoluteSize.X, 1)) * 100
+                applyTrans(pct)
+            end,
+            function()
+                if opts.OnTransparencyChanged then opts.OnTransparencyChanged(currentTransPct) end
             end
-        end))
+        )
 
         local tabData = {
             Name = tostring(tabName or "Settings"),
@@ -1032,6 +1218,10 @@ function Window:Create(lib, config)
 
     function WinObj:Destroy()
         ctx.IsAlive = false
+        if rainbowConn then
+            rainbowConn:Disconnect()
+            rainbowConn = nil
+        end
         if sharedState.activeOpenedDropdown then
             pcall(sharedState.activeOpenedDropdown)
         end
