@@ -126,12 +126,26 @@ function Loader.new(lib, config)
     local safeContainer = config.Parent or Utils:GetSafeParent()
     local guiName = config.GuiName or ("Syntaxis_Loader_" .. tostring(math.random(10000, 99999)))
 
+    local function protectGui(gui)
+        if Utils and Utils.ProtectGui then
+            Utils:ProtectGui(gui)
+            return
+        end
+        pcall(function() gui:SetAttribute("SyntaxisInstance", true) end)
+        if typeof(syn) == "table" and typeof(syn.protect_gui) == "function" then
+            pcall(syn.protect_gui, gui)
+        elseif typeof(protectgui) == "function" then
+            pcall(protectgui, gui)
+        end
+    end
+
     local scrimGui = Instance.new("ScreenGui")
     scrimGui.Name = guiName .. "_Scrim"
     scrimGui.ResetOnSpawn = false
     scrimGui.IgnoreGuiInset = true
     scrimGui.DisplayOrder = 999999998
     scrimGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    protectGui(scrimGui)
     scrimGui.Parent = safeContainer
 
     local screenGui = Instance.new("ScreenGui")
@@ -140,6 +154,7 @@ function Loader.new(lib, config)
     screenGui.IgnoreGuiInset = (config.IgnoreGuiInset == true)
     screenGui.DisplayOrder = 1000000000
     screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    protectGui(screenGui)
     screenGui.Parent = safeContainer
 
     -- =========================================================================
@@ -461,6 +476,7 @@ function Loader.new(lib, config)
         _steps = steps,
         _duration = math.max(1.0, config.Duration or 3.2),
         _isDismissed = false,
+        _isCancelled = false,
         _onCompleteCallbacks = {}
     }, Loader)
 
@@ -496,6 +512,17 @@ function Loader:_CleanupScrim()
         self._scrimGui = nil
     end
     self._backdropScrim = nil
+end
+
+function Loader:Destroy()
+    self._isCancelled = true
+    self._isDismissed = true
+    self:_CleanupBlur()
+    self:_CleanupScrim()
+    if self._screenGui then
+        pcall(function() self._screenGui:Destroy() end)
+        self._screenGui = nil
+    end
 end
 
 function Loader:_PlayEntrance()
@@ -569,7 +596,7 @@ function Loader:Play(callback)
 
     task.spawn(function()
         local currentRatio = 0
-        while currentRatio < 1 and not self._isDismissed do
+        while currentRatio < 1 and not self._isDismissed and not self._isCancelled do
             local elapsed = os.clock() - startTime
             local linearRatio = math.clamp(elapsed / totalDuration, 0, 1)
 
@@ -592,19 +619,21 @@ function Loader:Play(callback)
             task.wait(0.03)
         end
 
-        if not self._isDismissed then
+        if not self._isDismissed and not self._isCancelled then
             self:SetProgress(1, "Ready", string.format("%02d / %02d", #self._steps, #self._steps))
             task.wait(0.28)
-            self:Dismiss(callback)
+            if not self._isDismissed and not self._isCancelled then
+                self:Dismiss(callback)
+            end
         end
     end)
 end
 
 function Loader:OnComplete(callback)
     if typeof(callback) == "function" then
-        if self._isDismissed then
+        if self._isDismissed and not self._isCancelled then
             callback()
-        else
+        elseif not self._isCancelled then
             table.insert(self._onCompleteCallbacks, callback)
         end
     end
@@ -643,7 +672,7 @@ function Loader:_TweenOutBackground(tweenInfo)
 end
 
 function Loader:Dismiss(callback)
-    if self._isDismissed then return end
+    if self._isDismissed or self._isCancelled then return end
     self._isDismissed = true
 
     local targetFrame = self._config.TargetFrame
@@ -657,6 +686,7 @@ function Loader:Dismiss(callback)
 
     if shouldMorph then
         task.wait(0.08)
+        if self._isCancelled or not self._screenGui or not self._screenGui.Parent then return end
         -- Step 2: Dimensional Morph in exact coordinate space + synchronized iOS blur clear
         local morphInfo = TweenInfo.new(0.36, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
 
@@ -683,11 +713,12 @@ function Loader:Dismiss(callback)
         morphTween.Completed:Connect(function()
             self:_CleanupBlur()
             self:_CleanupScrim()
+            if self._isCancelled then return end
 
-            if targetFrame then
+            if targetFrame and targetFrame.Parent then
                 targetFrame.Visible = true
             end
-            if toggleOrb then
+            if toggleOrb and toggleOrb.Parent then
                 local orbTargetSize = self._config.ToggleOrbSize or UDim2.new(0, 52, 0, 52)
                 toggleOrb.Size = UDim2.new(0, 0, 0, 0)
                 toggleOrb.Visible = true
@@ -705,6 +736,7 @@ function Loader:Dismiss(callback)
 
             -- Yield one heartbeat so target window renders cleanly underneath before crossfade
             task.wait()
+            if self._isCancelled or not self._screenGui or not self._screenGui.Parent then return end
             local revealInfo = TweenInfo.new(0.16, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
             TweenService:Create(self._monolithStroke, revealInfo, { Transparency = 1 }):Play()
             local fadeShell = TweenService:Create(self._monolith, revealInfo, {
@@ -712,7 +744,9 @@ function Loader:Dismiss(callback)
             })
             fadeShell:Play()
             fadeShell.Completed:Connect(function()
-                pcall(function() self._screenGui:Destroy() end)
+                pcall(function()
+                    if self._screenGui then self._screenGui:Destroy() end
+                end)
             end)
         end)
     else
@@ -730,7 +764,10 @@ function Loader:Dismiss(callback)
         closeTween.Completed:Connect(function()
             self:_CleanupBlur()
             self:_CleanupScrim()
-            pcall(function() self._screenGui:Destroy() end)
+            pcall(function()
+                if self._screenGui then self._screenGui:Destroy() end
+            end)
+            if self._isCancelled then return end
             if typeof(callback) == "function" then callback() end
             for _, cb in ipairs(self._onCompleteCallbacks) do
                 pcall(cb)
