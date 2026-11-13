@@ -9,6 +9,53 @@ local UserInputService = game:GetService("UserInputService")
 
 local Components = {}
 
+local DROPDOWN_MENU_GAP = 6
+
+-- Position floating dropdown/multi-dropdown menus in PopupOverlayLayer space
+-- (which starts below TitleBar) so menus sit close to their trigger with a crisp gap.
+local function updateFloatingDropPlacement(frm, cntFrame, popupLayer, parent, box, dropArea, dropHeight)
+    if not box or not box.Parent or not frm or not frm.Parent or not box.Visible then
+        return false, 0
+    end
+    local layer = popupLayer or frm
+    local layerPos = layer.AbsolutePosition
+    local layerSize = layer.AbsoluteSize
+    local boxPos = box.AbsolutePosition
+    local boxSize = box.AbsoluteSize
+
+    local cntTop = cntFrame.AbsolutePosition.Y + 38
+    local cntBot = cntFrame.AbsolutePosition.Y + cntFrame.AbsoluteSize.Y - 4
+    if boxPos.Y + boxSize.Y < cntTop or boxPos.Y > cntBot then
+        return false, 0
+    end
+
+    local catFrame = parent and parent.Parent
+    if catFrame and catFrame:IsA("GuiObject") then
+        local catBot = catFrame.AbsolutePosition.Y + catFrame.AbsoluteSize.Y
+        if boxPos.Y + boxSize.Y > catBot + 2 then
+            return false, 0
+        end
+    end
+
+    local relX = boxPos.X - layerPos.X
+    local relYBelow = (boxPos.Y - layerPos.Y) + boxSize.Y + DROPDOWN_MENU_GAP
+    local availBelow = layerSize.Y - relYBelow - 10
+
+    if availBelow >= 72 then
+        local targetH = math.min(dropHeight, availBelow)
+        dropArea.AnchorPoint = Vector2.new(0, 0)
+        dropArea.Position = UDim2.new(0, relX, 0, relYBelow)
+        return true, targetH
+    else
+        local relYAbove = (boxPos.Y - layerPos.Y) - DROPDOWN_MENU_GAP
+        local availAbove = relYAbove - 6
+        local targetH = math.min(dropHeight, math.max(68, availAbove))
+        dropArea.AnchorPoint = Vector2.new(0, 1)
+        dropArea.Position = UDim2.new(0, relX, 0, relYAbove)
+        return true, targetH
+    end
+end
+
 function Components:CreateCategory(ctx, title, parent, order, defaultOpen)
     local Animations = ctx.Animations
     local Utils = ctx.Utils
@@ -598,8 +645,19 @@ end
 function Components:CreateSlider(ctx, title, desc, min, max, defaultVal, increment, parent, order, callback)
     local Utils = ctx.Utils
     local activeTheme = ctx.ActiveTheme
-    increment = increment or 1
+    increment = (tonumber(increment) and tonumber(increment) > 0) and tonumber(increment) or 1
     local curVal = math.clamp(tonumber(defaultVal) or min, min, max)
+
+    local numFmt = Utils:CreateNumericFormatter(min, max, increment, "", {
+        TextSize = 12,
+        Weight = Enum.FontWeight.Bold,
+        Padding = 4
+    })
+    local TRACK_WIDTH = 80
+    local RIGHT_MARGIN = 12
+    local TITLE_GAP = 10
+    local rightColW = math.max(TRACK_WIDTH, numFmt.ReservedWidth)
+    local leftReserve = rightColW + RIGHT_MARGIN + TITLE_GAP
 
     local row = Instance.new("Frame", parent)
     row.Size = UDim2.new(1, 0, 0, 52)
@@ -615,38 +673,41 @@ function Components:CreateSlider(ctx, title, desc, min, max, defaultVal, increme
     rowStr.Transparency = 0.40
 
     local tit = Instance.new("TextLabel", row)
-    tit.Size = UDim2.new(1, -96, 0, 18)
+    tit.Size = UDim2.new(1, -leftReserve, 0, 18)
     tit.Position = UDim2.new(0, 12, 0, 6)
     tit.BackgroundTransparency = 1
     tit.Font = Enum.Font.GothamBold
     tit.TextSize = 12
     tit.TextColor3 = Color3.fromRGB(255, 255, 255)
     tit.TextXAlignment = Enum.TextXAlignment.Left
+    tit.TextTruncate = Enum.TextTruncate.AtEnd
     tit.Text = tostring(title or "Slider")
 
     local sub = Instance.new("TextLabel", row)
-    sub.Size = UDim2.new(1, -96, 0, 20)
+    sub.Size = UDim2.new(1, -leftReserve, 0, 20)
     sub.Position = UDim2.new(0, 12, 0, 24)
     sub.BackgroundTransparency = 1
     sub.Font = Enum.Font.Gotham
     sub.TextSize = 9.5
     sub.TextColor3 = activeTheme.SubText
     sub.TextXAlignment = Enum.TextXAlignment.Left
+    sub.TextTruncate = Enum.TextTruncate.AtEnd
     sub.Text = tostring(desc or "")
 
     local valLbl = Instance.new("TextLabel", row)
-    valLbl.Size = UDim2.new(0, 75, 0, 18)
-    valLbl.Position = UDim2.new(1, -87, 0, 6)
+    valLbl.AnchorPoint = Vector2.new(1, 0)
+    valLbl.Size = UDim2.new(0, numFmt.ReservedWidth, 0, 18)
+    valLbl.Position = UDim2.new(1, -RIGHT_MARGIN, 0, 6)
     valLbl.BackgroundTransparency = 1
-    valLbl.Font = Enum.Font.GothamBold
-    valLbl.TextSize = 11.5
+    valLbl.TextSize = 12
     valLbl.TextColor3 = activeTheme.Accent2
     valLbl.TextXAlignment = Enum.TextXAlignment.Right
-    valLbl.Text = tostring(curVal)
+    Utils:ApplyTabularFont(valLbl, Enum.FontWeight.Bold)
+    valLbl.Text = numFmt.Format(curVal)
 
     local trk = Instance.new("Frame", row)
-    trk.Size = UDim2.new(0, 80, 0, 6)
-    trk.Position = UDim2.new(1, -92, 0.5, 6)
+    trk.Size = UDim2.new(0, TRACK_WIDTH, 0, 6)
+    trk.Position = UDim2.new(1, -(TRACK_WIDTH + RIGHT_MARGIN), 0.5, 6)
     trk.BackgroundColor3 = activeTheme.SwitchOff
     trk.BorderSizePixel = 0
     trk:SetAttribute("NoTrans", true)
@@ -665,7 +726,9 @@ function Components:CreateSlider(ctx, title, desc, min, max, defaultVal, increme
     kn.Position = UDim2.new(pct, -7.5, 0.5, -7.5)
     kn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     kn.BorderSizePixel = 0
+    kn.AutoButtonColor = false
     kn.Text = ""
+    kn.ZIndex = 3
     kn:SetAttribute("NoTrans", true)
     Utils:RoundCorner(kn, 999)
 
@@ -674,38 +737,39 @@ function Components:CreateSlider(ctx, title, desc, min, max, defaultVal, increme
     knStr.Color = Color3.fromRGB(200, 205, 220)
     knStr.Transparency = 0.4
 
-    local function setValue(val, fireCallback)
-        local snappedVal = math.floor((val / increment) + 0.5) * increment
+    local hitZone = Instance.new("TextButton", trk)
+    hitZone.Name = "HitZone"
+    hitZone.Text = ""
+    hitZone.AutoButtonColor = false
+    hitZone.BackgroundTransparency = 1
+    hitZone.BorderSizePixel = 0
+    hitZone.AnchorPoint = Vector2.new(0.5, 0.5)
+    hitZone.Position = UDim2.new(0.5, 0, 0.5, 0)
+    hitZone.Size = UDim2.new(1, 16, 0, 22)
+    hitZone.ZIndex = 2
+    hitZone:SetAttribute("NoTrans", true)
+
+    local function setValue(val, fireCallback, forceFire)
+        local snappedVal = min + math.floor(((val - min) / increment) + 0.5) * increment
         snappedVal = math.clamp(snappedVal, min, max)
+        snappedVal = Utils:RoundToDecimals(snappedVal, numFmt.Decimals)
+        local changed = (snappedVal ~= curVal)
         curVal = snappedVal
         local finalPct = (snappedVal - min) / math.max(max - min, 0.0001)
         fil.Size = UDim2.new(finalPct, 0, 1, 0)
         kn.Position = UDim2.new(finalPct, -7.5, 0.5, -7.5)
-        valLbl.Text = tostring(snappedVal)
-        if fireCallback and callback then callback(snappedVal) end
+        valLbl.Text = numFmt.Format(snappedVal)
+        if fireCallback and callback and (changed or forceFire) then callback(snappedVal) end
     end
 
     local function updateFromPos(inputPos)
         local relX = math.clamp(inputPos.X - trk.AbsolutePosition.X, 0, trk.AbsoluteSize.X)
         local newPct = relX / math.max(trk.AbsoluteSize.X, 1)
         local rawVal = min + (max - min) * newPct
-        setValue(rawVal, true)
+        setValue(rawVal, true, false)
     end
 
-    table.insert(ctx.Connections, trk.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            updateFromPos(input.Position)
-            local moveConn
-            moveConn = input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.Change then
-                    updateFromPos(input.Position)
-                elseif input.UserInputState == Enum.UserInputState.End then
-                    if moveConn then moveConn:Disconnect() end
-                end
-            end)
-            table.insert(ctx.Connections, moveConn)
-        end
-    end))
+    Utils:BindSliderDrag({ hitZone, kn, trk }, trk, ctx.Connections, updateFromPos)
 
     table.insert(ctx.State.themeSubscribers, function(th)
         row.BackgroundColor3 = th.RowBg
@@ -718,7 +782,7 @@ function Components:CreateSlider(ctx, title, desc, min, max, defaultVal, increme
 
     return {
         Instance = row,
-        SetValue = function(_, v, fire) setValue(v, fire) end,
+        SetValue = function(_, v, fire) setValue(v, fire, true) end,
         GetValue = function() return curVal end
     }
 end
@@ -848,45 +912,7 @@ function Components:CreateDropdown(ctx, title, desc, items, defaultVal, parent, 
     local closeMenu
 
     local function updateDropPosition()
-        if not box or not box.Parent or not frm or not frm.Parent or not box.Visible then
-            return false, 0
-        end
-        local frmPos = frm.AbsolutePosition
-        local frmSize = frm.AbsoluteSize
-        local boxPos = box.AbsolutePosition
-        local boxSize = box.AbsoluteSize
-
-        local cntTop = cntFrame.AbsolutePosition.Y + 38
-        local cntBot = cntFrame.AbsolutePosition.Y + cntFrame.AbsoluteSize.Y - 4
-        if boxPos.Y + boxSize.Y < cntTop or boxPos.Y > cntBot then
-            return false, 0
-        end
-
-        local catFrame = parent and parent.Parent
-        if catFrame and catFrame:IsA("GuiObject") then
-            local catBot = catFrame.AbsolutePosition.Y + catFrame.AbsoluteSize.Y
-            if boxPos.Y + boxSize.Y > catBot + 2 then
-                return false, 0
-            end
-        end
-
-        local relX = boxPos.X - frmPos.X
-        local relYBelow = (boxPos.Y - frmPos.Y) + boxSize.Y + 4
-        local availBelow = frmSize.Y - relYBelow - 8
-
-        if availBelow >= 72 then
-            local targetH = math.min(dropHeight, availBelow)
-            dropArea.AnchorPoint = Vector2.new(0, 0)
-            dropArea.Position = UDim2.new(0, relX, 0, relYBelow)
-            return true, targetH
-        else
-            local relYAbove = (boxPos.Y - frmPos.Y) - 4
-            local availAbove = relYAbove - 50
-            local targetH = math.min(dropHeight, math.max(68, availAbove))
-            dropArea.AnchorPoint = Vector2.new(0, 1)
-            dropArea.Position = UDim2.new(0, relX, 0, relYAbove)
-            return true, targetH
-        end
+        return updateFloatingDropPlacement(frm, cntFrame, popupLayer, parent, box, dropArea, dropHeight)
     end
 
     local function populateOptions()
@@ -978,7 +1004,7 @@ function Components:CreateDropdown(ctx, title, desc, items, defaultVal, parent, 
 
     table.insert(ctx.Connections, box.MouseButton1Click:Connect(toggleMenu))
 
-    table.insert(ctx.State.themeSubscribers, function(th)
+    table.insert(ctx.State.themeSubscribers, function(th, isLiveTick)
         row.BackgroundColor3 = th.RowBg
         rowStr.Color = th.Stroke
         sub.TextColor3 = th.SubText
@@ -989,7 +1015,7 @@ function Components:CreateDropdown(ctx, title, desc, items, defaultVal, parent, 
         dropAreaStr.Color = th.Stroke
         optScrl.ScrollBarImageColor3 = th.Accent2
         arr.TextColor3 = th.Accent2
-        if isExpanded then populateOptions() end
+        if isExpanded and not isLiveTick then populateOptions() end
     end)
 
     return {
@@ -1188,45 +1214,7 @@ function Components:CreateMultiDropdown(ctx, title, desc, items, defaultMap, par
     local closeMenu
 
     local function updateDropPosition()
-        if not box or not box.Parent or not frm or not frm.Parent or not box.Visible then
-            return false, 0
-        end
-        local frmPos = frm.AbsolutePosition
-        local frmSize = frm.AbsoluteSize
-        local boxPos = box.AbsolutePosition
-        local boxSize = box.AbsoluteSize
-
-        local cntTop = cntFrame.AbsolutePosition.Y + 38
-        local cntBot = cntFrame.AbsolutePosition.Y + cntFrame.AbsoluteSize.Y - 4
-        if boxPos.Y + boxSize.Y < cntTop or boxPos.Y > cntBot then
-            return false, 0
-        end
-
-        local catFrame = parent and parent.Parent
-        if catFrame and catFrame:IsA("GuiObject") then
-            local catBot = catFrame.AbsolutePosition.Y + catFrame.AbsoluteSize.Y
-            if boxPos.Y + boxSize.Y > catBot + 2 then
-                return false, 0
-            end
-        end
-
-        local relX = boxPos.X - frmPos.X
-        local relYBelow = (boxPos.Y - frmPos.Y) + boxSize.Y + 4
-        local availBelow = frmSize.Y - relYBelow - 8
-
-        if availBelow >= 72 then
-            local targetH = math.min(dropHeight, availBelow)
-            dropArea.AnchorPoint = Vector2.new(0, 0)
-            dropArea.Position = UDim2.new(0, relX, 0, relYBelow)
-            return true, targetH
-        else
-            local relYAbove = (boxPos.Y - frmPos.Y) - 4
-            local availAbove = relYAbove - 50
-            local targetH = math.min(dropHeight, math.max(68, availAbove))
-            dropArea.AnchorPoint = Vector2.new(0, 1)
-            dropArea.Position = UDim2.new(0, relX, 0, relYAbove)
-            return true, targetH
-        end
+        return updateFloatingDropPlacement(frm, cntFrame, popupLayer, parent, box, dropArea, dropHeight)
     end
 
     local function populateOptions()
@@ -1340,7 +1328,7 @@ function Components:CreateMultiDropdown(ctx, title, desc, items, defaultMap, par
 
     table.insert(ctx.Connections, box.MouseButton1Click:Connect(toggleMenu))
 
-    table.insert(ctx.State.themeSubscribers, function(th)
+    table.insert(ctx.State.themeSubscribers, function(th, isLiveTick)
         row.BackgroundColor3 = th.RowBg
         rowStr.Color = th.Stroke
         sub.TextColor3 = th.SubText
@@ -1351,7 +1339,7 @@ function Components:CreateMultiDropdown(ctx, title, desc, items, defaultMap, par
         dropAreaStr.Color = th.Stroke
         optScrl.ScrollBarImageColor3 = th.Accent2
         arr.TextColor3 = th.Accent2
-        if isExpanded then populateOptions() end
+        if isExpanded and not isLiveTick then populateOptions() end
     end)
 
     return {
@@ -1458,55 +1446,76 @@ function Components:CreateTextbox(ctx, title, desc, placeholder, defaultText, pa
     rowStr.Transparency = 0.40
 
     local tit = Instance.new("TextLabel", row)
-    tit.Size = UDim2.new(1, -148, 0, 18)
+    tit.Size = UDim2.new(1, -162, 0, 18)
     tit.Position = UDim2.new(0, 12, 0, 7)
     tit.BackgroundTransparency = 1
     tit.Font = Enum.Font.GothamBold
     tit.TextSize = 12
     tit.TextColor3 = Color3.fromRGB(255, 255, 255)
     tit.TextXAlignment = Enum.TextXAlignment.Left
+    tit.TextTruncate = Enum.TextTruncate.AtEnd
     tit.Text = tostring(title or "Input")
 
     local sub = Instance.new("TextLabel", row)
-    sub.Size = UDim2.new(1, -148, 0, 20)
+    sub.Size = UDim2.new(1, -162, 0, 22)
     sub.Position = UDim2.new(0, 12, 0, 25)
     sub.BackgroundTransparency = 1
     sub.Font = Enum.Font.Gotham
     sub.TextSize = 9.5
     sub.TextColor3 = activeTheme.SubText
     sub.TextXAlignment = Enum.TextXAlignment.Left
+    sub.TextYAlignment = Enum.TextYAlignment.Top
     sub.TextWrapped = true
+    sub.TextTruncate = Enum.TextTruncate.AtEnd
     sub.Text = tostring(desc or "")
 
-    local inp = Instance.new("TextBox", row)
-    inp.AnchorPoint = Vector2.new(1, 0.5)
-    inp.Size = UDim2.new(0, 128, 0, 28)
-    inp.Position = UDim2.new(1, -10, 0.5, 0)
-    inp.BackgroundColor3 = activeTheme.BoxBg
-    inp.BackgroundTransparency = 0.12
-    inp.BorderSizePixel = 0
-    inp.Font = Enum.Font.GothamMedium
-    inp.TextSize = 10.5
-    inp.TextColor3 = Color3.fromRGB(255, 255, 255)
-    inp.PlaceholderText = tostring(placeholder or "Enter text...")
-    inp.PlaceholderColor3 = activeTheme.SubText
-    inp.Text = tostring(defaultText or "")
-    inp.ClearTextOnFocus = false
-    inp:SetAttribute("NoTrans", true)
-    Utils:RoundCorner(inp, 8)
+    local inpBox = Instance.new("Frame", row)
+    inpBox.Name = "InputContainer"
+    inpBox.AnchorPoint = Vector2.new(1, 0.5)
+    inpBox.Size = UDim2.new(0, 132, 0, 28)
+    inpBox.Position = UDim2.new(1, -10, 0.5, 0)
+    inpBox.BackgroundColor3 = activeTheme.BoxBg
+    inpBox.BackgroundTransparency = 0.12
+    inpBox.BorderSizePixel = 0
+    inpBox.ClipsDescendants = true
+    inpBox:SetAttribute("NoTrans", true)
+    Utils:RoundCorner(inpBox, 8)
 
-    local inpStr = Instance.new("UIStroke", inp)
+    local inpPad = Instance.new("UIPadding", inpBox)
+    inpPad.PaddingLeft = UDim.new(0, 8)
+    inpPad.PaddingRight = UDim.new(0, 8)
+
+    local inpStr = Instance.new("UIStroke", inpBox)
     inpStr.Thickness = 1
     inpStr.Color = activeTheme.Stroke
     inpStr.Transparency = 0.30
     inpStr:SetAttribute("NoTrans", true)
 
+    local inp = Instance.new("TextBox", inpBox)
+    inp.Size = UDim2.new(1, 0, 1, 0)
+    inp.BackgroundTransparency = 1
+    inp.BorderSizePixel = 0
+    inp.ClipsDescendants = true
+    inp.Font = Enum.Font.GothamMedium
+    inp.TextSize = 10.5
+    inp.TextColor3 = Color3.fromRGB(255, 255, 255)
+    inp.TextXAlignment = Enum.TextXAlignment.Left
+    inp.TextYAlignment = Enum.TextYAlignment.Center
+    inp.TextTruncate = Enum.TextTruncate.AtEnd
+    inp.PlaceholderText = tostring(placeholder or "Enter text...")
+    inp.PlaceholderColor3 = activeTheme.SubText:Lerp(activeTheme.BoxBg, 0.25)
+    inp.Text = tostring(defaultText or "")
+    inp.ClearTextOnFocus = false
+    inp:SetAttribute("NoTrans", true)
+
     table.insert(ctx.Connections, inp.Focused:Connect(function()
+        inp.TextTruncate = Enum.TextTruncate.None
         inpStr.Color = ctx.ActiveTheme.Accent2
         inpStr.Transparency = 0.05
     end))
 
     table.insert(ctx.Connections, inp.FocusLost:Connect(function(enterPressed)
+        inp.TextTruncate = Enum.TextTruncate.AtEnd
         inpStr.Color = ctx.ActiveTheme.Stroke
         inpStr.Transparency = 0.30
         if callback then callback(inp.Text, enterPressed) end
@@ -1516,8 +1525,8 @@ function Components:CreateTextbox(ctx, title, desc, placeholder, defaultText, pa
         row.BackgroundColor3 = th.RowBg
         rowStr.Color = th.Stroke
         sub.TextColor3 = th.SubText
-        inp.BackgroundColor3 = th.BoxBg
-        inp.PlaceholderColor3 = th.SubText
+        inpBox.BackgroundColor3 = th.BoxBg
+        inp.PlaceholderColor3 = th.SubText:Lerp(th.BoxBg, 0.25)
         inpStr.Color = th.Stroke
     end)
 
