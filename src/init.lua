@@ -40,15 +40,6 @@ end
 function SyntaxisLib:CreateWindow(config)
     config = config or {}
     if config.ShowLoader then
-        local loader = self:CreateLoader({
-            Title = config.Title or "Syntaxis",
-            GameName = config.GameName or config.Subtitle or "tungtung",
-            Theme = config.Theme or "Sapphire",
-            Icon = config.Icon or "rbxassetid://71471996876777",
-            Duration = config.LoaderDuration or 2.2,
-            Steps = config.LoaderSteps
-        })
-
         local winConfig = {}
         for k, v in pairs(config) do winConfig[k] = v end
         winConfig.ShowLoader = false
@@ -57,16 +48,38 @@ function SyntaxisLib:CreateWindow(config)
         if window and window.MainFrame then
             window.MainFrame.Visible = false
         end
-        if window and window.Toggle then
-            window.Toggle.Visible = false
+        local toggleOrb = window and (window.ToggleOrb or window.Toggle)
+        local toggleOrbSize = toggleOrb and toggleOrb.Size or UDim2.new(0, 52, 0, 52)
+        if toggleOrb then
+            toggleOrb.Visible = false
         end
+
+        local loader = self:CreateLoader({
+            Title = config.Title or "Syntaxis",
+            GameName = config.GameName or config.Subtitle or "tungtung",
+            Theme = config.Theme or "Sapphire",
+            Icon = config.Icon or "rbxassetid://71471996876777",
+            Layout = config.LoaderLayout or "B",
+            Duration = config.LoaderDuration or 3.2,
+            Steps = config.LoaderSteps,
+            BlurEnabled = (config.LoaderBlur ~= false),
+            BlurSize = config.LoaderBlurSize or 20,
+            BackdropTransparency = config.LoaderBackdropTransparency or 0.74,
+            MorphToWindow = (config.MorphToWindow ~= false),
+            IgnoreGuiInset = (window and window.ScreenGui and window.ScreenGui.IgnoreGuiInset) or false,
+            MorphPosition = (window and window.MainFrame and window.MainFrame.Position) or UDim2.new(0.5, 0, 0.5, 0),
+            MorphSize = (window and window.MainFrame and window.MainFrame.Size) or config.Size or UDim2.new(0, 510, 0, 345),
+            TargetFrame = window and window.MainFrame,
+            ToggleOrb = toggleOrb,
+            ToggleOrbSize = toggleOrbSize
+        })
 
         loader:OnComplete(function()
             if window and window.MainFrame then
                 window.MainFrame.Visible = true
             end
-            if window and window.Toggle then
-                window.Toggle.Visible = true
+            if toggleOrb then
+                toggleOrb.Visible = true
             end
         end)
 

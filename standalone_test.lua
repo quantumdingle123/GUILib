@@ -1,8 +1,9 @@
 -- ==============================================================================
--- [ SYNTAXIS GUI LIBRARY v2.2.0 - STANDALONE VERIFICATION & DEMO SCRIPT ]
+-- [ SYNTAXIS GUI LIBRARY v2.3.0 - STANDALONE VERIFICATION & DEMO SCRIPT ]
 -- Repository: https://github.com/quantumdingle123/GUILib
--- Purpose: Standalone test environment verifying all modules, components,
---          Search Bar, Keybinds, callbacks, themes, floating dropdowns, and cleanup.
+-- Purpose: Standalone test environment verifying Centered Monolith Loader,
+--          iOS Blur morph transition, Search Bar, Keybinds, tabular sliders,
+--          8 themes (including Rainbow), floating dropdowns, and cleanup.
 -- ==============================================================================
 
 local SyntaxisLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/quantumdingle123/GUILib/main/SyntaxisLib.lua"))()
@@ -36,11 +37,15 @@ local function FormatMoney(num)
     return "$" .. tostring(num) .. "/s"
 end
 
--- 1. Create Main Window
+-- 1. Create Main Window (with Centered Monolith Loader + iOS Blur morph)
 local Window = SyntaxisLib:CreateWindow({
     Title = "Syntaxis",
+    GameName = "Standalone Showcase",
     GuiName = "SyntaxHubGUI_Test",
     Theme = DemoState.themeName,
+    ShowLoader = true,
+    LoaderDuration = 2.6,
+    LoaderBlur = true,
     State = DemoState,
     OnThemeChanged = function(themeName)
         print("[SyntaxisTest] Theme switched to:", themeName)
@@ -102,7 +107,7 @@ local DdRarity = CatSteal:CreateDropdown(
 local SldScale = CatSteal:CreateSlider(
     "Min Scale",
     "Minimum egg size multiplier",
-    1, 10, 1, 0.5,
+    1, 100, 1, 0.5,
     function(val)
         print("[SyntaxisTest] Min Scale:", val)
     end
@@ -123,7 +128,6 @@ CatControls:CreateTextbox(
         LblStatus:SetText("Webhook updated: " .. (#text > 0 and "Configured" or "Empty"))
     end
 )
-
 
 CatControls:CreateKeybind(
     "Toggle Menu Keybind",

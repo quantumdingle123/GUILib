@@ -121,8 +121,8 @@ function Panels:SetupPriorityPanel(ctx, priorityPg, opts)
         end
     end
 
-    table.insert(ctx.State.themeSubscribers, function()
-        if priorityPg.Visible then renderPriorityPanel() end
+    table.insert(ctx.State.themeSubscribers, function(_, isLiveTick)
+        if not isLiveTick and priorityPg.Visible then renderPriorityPanel() end
     end)
 
     return renderPriorityPanel
