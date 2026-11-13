@@ -22,7 +22,7 @@ A modular, reusable iOS / Liquid Glass UI library for Roblox Luau scripts. Desig
 
 ```text
 GUILib/
-├── SyntaxisLib.lua         # Single-request bundled distribution (v2.3.0) for fast executor loading
+├── SyntaxisLib.lua         # Modular public entrypoint (v2.3.0) loading src/ modules with automatic retry
 ├── standalone_test.lua     # Standalone verification & showcase script
 ├── README.md               # Developer documentation & API reference
 └── src/                    # Modular source files
