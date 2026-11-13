@@ -11,11 +11,39 @@ local Components = {}
 
 local DROPDOWN_MENU_GAP = 6
 
+local function elevateIdentity(utils)
+    if utils and utils.ElevateIdentity then
+        utils:ElevateIdentity(7)
+    else
+        local setId = setthreadidentity or set_thread_identity
+        if type(setId) == "function" then
+            pcall(setId, 7)
+        end
+    end
+end
+
+local function safeParent(utils, inst, parent)
+    if utils and utils.SafeParent then
+        return utils:SafeParent(inst, parent)
+    end
+    local ok = pcall(function()
+        inst.Parent = parent
+    end)
+    return ok
+end
+
 -- Position floating dropdown/multi-dropdown menus in PopupOverlayLayer space
 -- (which starts below TitleBar) so menus sit close to their trigger with a crisp gap.
 local function updateFloatingDropPlacement(frm, cntFrame, popupLayer, parent, box, dropArea, dropHeight)
-    if not box or not box.Parent or not frm or not frm.Parent or not box.Visible then
+    if not box or not box.Parent or not frm or not frm.Parent or not frm.Visible then
         return false, 0
+    end
+    local cur = box
+    while cur and cur ~= frm do
+        if cur:IsA("GuiObject") and not cur.Visible then
+            return false, 0
+        end
+        cur = cur.Parent
     end
     local layer = popupLayer or frm
     local layerPos = layer.AbsolutePosition
@@ -231,6 +259,11 @@ function Components:CreateCategory(ctx, title, parent, order, defaultOpen)
     end
 
     function CategoryObj:CreateSlider(sTitle, desc, min, max, defaultVal, increment, callback, explicitOrder)
+        if type(increment) == "function" then
+            explicitOrder = callback
+            callback = increment
+            increment = 1
+        end
         local item = Components:CreateSlider(ctx, sTitle, desc, min, max, defaultVal, increment, content, nextOrder(explicitOrder), callback)
         if ctx.RegisterSearchItem then ctx:RegisterSearchItem(sTitle, desc, item, CategoryObj) end
         return item
@@ -380,14 +413,28 @@ function Components:CreateKeybind(ctx, title, desc, defaultKey, parent, order, c
 
     local isListening = false
     local listenConn = nil
+    local cancelEndConn = nil
+    local suppressNextClick = false
+    local suppressExpiresAt = 0
+
+    local function clearCancelEndConn()
+        if cancelEndConn then
+            pcall(function() cancelEndConn:Disconnect() end)
+            cancelEndConn = nil
+        end
+    end
+
+    local function disconnectListenConn()
+        if listenConn then
+            pcall(function() listenConn:Disconnect() end)
+            listenConn = nil
+        end
+    end
 
     local function stopListening(cancelled)
         if not isListening then return end
         isListening = false
-        if listenConn then
-            listenConn:Disconnect()
-            listenConn = nil
-        end
+        disconnectListenConn()
         btnStr.Color = ctx.ActiveTheme.Stroke
         btnStr.Thickness = 1
         btn.BackgroundColor3 = ctx.ActiveTheme.BoxBg
@@ -395,13 +442,12 @@ function Components:CreateKeybind(ctx, title, desc, defaultKey, parent, order, c
         Animations:Tween(btn, Animations.Fast, { Size = normalBadgeSize })
     end
 
-    local function applyKey(newKey)
+    local function applyKey(newKey, fireCallback)
         currentKey = newKey
         isListening = false
-        if listenConn then
-            listenConn:Disconnect()
-            listenConn = nil
-        end
+        disconnectListenConn()
+        suppressNextClick = false
+        clearCancelEndConn()
         btn.Text = "[ " .. formatKeyCode(currentKey) .. " ]"
         btnStr.Color = ctx.ActiveTheme.Accent2
         btn.BackgroundColor3 = ctx.ActiveTheme.Accent
@@ -420,15 +466,34 @@ function Components:CreateKeybind(ctx, title, desc, defaultKey, parent, order, c
             end)
         end)
 
-        if callback then
+        if fireCallback and callback then
             task.spawn(callback, currentKey, false)
         end
+    end
+
+    local function isPointerOverBtn(input)
+        local pos = input and input.Position
+        local absPos = btn.AbsolutePosition
+        local absSize = btn.AbsoluteSize
+        if not pos or not absPos or not absSize or absSize.X <= 0 or absSize.Y <= 0 then
+            return false
+        end
+        return pos.X >= absPos.X - 2 and pos.X <= absPos.X + absSize.X + 2
+            and pos.Y >= absPos.Y - 2 and pos.Y <= absPos.Y + absSize.Y + 2
     end
 
     local function startListening()
         if isListening then
             stopListening(true)
             return
+        end
+        if suppressNextClick then
+            local wasPending = (os.clock() <= suppressExpiresAt)
+            suppressNextClick = false
+            clearCancelEndConn()
+            if wasPending then
+                return
+            end
         end
         isListening = true
         btn.Text = "[ ... ]"
@@ -437,27 +502,53 @@ function Components:CreateKeybind(ctx, title, desc, defaultKey, parent, order, c
         btn.BackgroundColor3 = ctx.ActiveTheme.Accent
         Animations:Tween(btn, Animations.Fast, { Size = normalBadgeSize })
 
-        if listenConn then listenConn:Disconnect() end
+        disconnectListenConn()
         listenConn = UserInputService.InputBegan:Connect(function(input, gameProcessed)
             if not isListening then return end
 
             if input.UserInputType == Enum.UserInputType.Keyboard then
                 local kc = input.KeyCode
                 if kc == Enum.KeyCode.Backspace or kc == Enum.KeyCode.Delete or kc == Enum.KeyCode.Escape then
-                    applyKey(Enum.KeyCode.Unknown)
+                    applyKey(Enum.KeyCode.Unknown, true)
                 else
-                    applyKey(kc)
+                    applyKey(kc, true)
                 end
             elseif input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.MouseButton2 or input.UserInputType == Enum.UserInputType.Touch then
+                if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) and isPointerOverBtn(input) then
+                    suppressNextClick = true
+                    suppressExpiresAt = os.clock() + 5
+                    clearCancelEndConn()
+                    local okChanged, changedConn = pcall(function()
+                        return input.Changed:Connect(function()
+                            if input.UserInputState == Enum.UserInputState.End or input.UserInputState == Enum.UserInputState.Cancel then
+                                clearCancelEndConn()
+                                task.defer(function()
+                                    suppressNextClick = false
+                                end)
+                            end
+                        end)
+                    end)
+                    if okChanged and changedConn then
+                        cancelEndConn = changedConn
+                    else
+                        suppressExpiresAt = os.clock() + 0.5
+                    end
+                end
                 stopListening(true)
             end
         end)
-        table.insert(ctx.Connections, listenConn)
     end
+
+    table.insert(ctx.Connections, {
+        Disconnect = function()
+            disconnectListenConn()
+            clearCancelEndConn()
+        end
+    })
 
     -- Tactile click press micro-indent
     table.insert(ctx.Connections, btn.InputBegan:Connect(function(input)
-        if not isListening and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
+        if not isListening and not suppressNextClick and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
             Animations:Tween(btn, Animations.Fast, {
                 Size = UDim2.new(0, math.floor(normalBadgeSize.X.Offset * 0.92), 0, math.floor(normalBadgeSize.Y.Offset * 0.92))
             })
@@ -522,10 +613,7 @@ function Components:CreateKeybind(ctx, title, desc, defaultKey, parent, order, c
                 local ok, parsed = pcall(function() return Enum.KeyCode[newKey] end)
                 kc = (ok and parsed) or Enum.KeyCode.Unknown
             end
-            applyKey(kc or Enum.KeyCode.Unknown)
-            if fire and callback then
-                task.spawn(callback, currentKey, false)
-            end
+            applyKey(kc or Enum.KeyCode.Unknown, fire == true)
         end,
         OnPress = function(_, fn)
             callback = fn
@@ -645,6 +733,10 @@ end
 function Components:CreateSlider(ctx, title, desc, min, max, defaultVal, increment, parent, order, callback)
     local Utils = ctx.Utils
     local activeTheme = ctx.ActiveTheme
+    if type(increment) == "function" then
+        callback = callback or increment
+        increment = 1
+    end
     increment = (tonumber(increment) and tonumber(increment) > 0) and tonumber(increment) or 1
     local curVal = math.clamp(tonumber(defaultVal) or min, min, max)
 
@@ -916,6 +1008,7 @@ function Components:CreateDropdown(ctx, title, desc, items, defaultVal, parent, 
     end
 
     local function populateOptions()
+        elevateIdentity(Utils)
         for _, ch in ipairs(optScrl:GetChildren()) do
             if ch:IsA("TextButton") then ch:Destroy() end
         end
@@ -924,7 +1017,7 @@ function Components:CreateDropdown(ctx, title, desc, items, defaultVal, parent, 
             local itemStr = tostring(item)
             local isSel = (itemStr == currentVal)
 
-            local btn = Instance.new("TextButton", optScrl)
+            local btn = Instance.new("TextButton")
             btn.Size = UDim2.new(1, -4, 0, 24)
             btn.BackgroundColor3 = isSel and ctx.ActiveTheme.Accent or ctx.ActiveTheme.RowBg
             btn.BackgroundTransparency = isSel and 0.08 or 0.30
@@ -940,10 +1033,13 @@ function Components:CreateDropdown(ctx, title, desc, items, defaultVal, parent, 
             Utils:RoundCorner(btn, 6)
 
             btn.MouseButton1Click:Connect(function()
+                elevateIdentity(Utils)
                 currentVal = itemStr
                 if callback then callback(item) end
                 if closeMenu then closeMenu() end
             end)
+
+            safeParent(Utils, btn, optScrl)
         end
     end
 
@@ -1218,6 +1314,7 @@ function Components:CreateMultiDropdown(ctx, title, desc, items, defaultMap, par
     end
 
     local function populateOptions()
+        elevateIdentity(Utils)
         for _, ch in ipairs(optScrl:GetChildren()) do
             if ch:IsA("TextButton") then ch:Destroy() end
         end
@@ -1226,7 +1323,7 @@ function Components:CreateMultiDropdown(ctx, title, desc, items, defaultMap, par
             local itemStr = tostring(item)
             local isSel = (selectedMap[itemStr] == true)
 
-            local btn = Instance.new("TextButton", optScrl)
+            local btn = Instance.new("TextButton")
             btn.Size = UDim2.new(1, -4, 0, 24)
             btn.BackgroundColor3 = isSel and ctx.ActiveTheme.Accent or ctx.ActiveTheme.RowBg
             btn.BackgroundTransparency = isSel and 0.08 or 0.30
@@ -1242,6 +1339,7 @@ function Components:CreateMultiDropdown(ctx, title, desc, items, defaultMap, par
             Utils:RoundCorner(btn, 6)
 
             btn.MouseButton1Click:Connect(function()
+                elevateIdentity(Utils)
                 if isAreaMenu then
                     if itemStr == "All" then
                         table.clear(selectedMap)
@@ -1267,9 +1365,11 @@ function Components:CreateMultiDropdown(ctx, title, desc, items, defaultMap, par
                     end
                 end
 
-                populateOptions()
+                pcall(populateOptions)
                 if callback then callback(selectedMap) end
             end)
+
+            safeParent(Utils, btn, optScrl)
         end
     end
 
