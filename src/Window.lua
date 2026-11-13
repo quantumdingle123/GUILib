@@ -40,16 +40,20 @@ function Window:Create(lib, config)
         mainUI.Name = "SyntaxHubGUI"
     end
 
-    mainUI:SetAttribute("SyntaxisInstance", true)
     mainUI.ResetOnSpawn = false
     mainUI.DisplayOrder = 999999999
     -- Sibling ZIndexBehavior prevents translucent parent containers from rendering over child text/toggles
     mainUI.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
-    if typeof(syn) == "table" and typeof(syn.protect_gui) == "function" then
-        pcall(syn.protect_gui, mainUI)
-    elseif typeof(protectgui) == "function" then
-        pcall(protectgui, mainUI)
+    if Utils and Utils.ProtectGui then
+        Utils:ProtectGui(mainUI)
+    else
+        mainUI:SetAttribute("SyntaxisInstance", true)
+        if typeof(syn) == "table" and typeof(syn.protect_gui) == "function" then
+            pcall(syn.protect_gui, mainUI)
+        elseif typeof(protectgui) == "function" then
+            pcall(protectgui, mainUI)
+        end
     end
 
     mainUI.Parent = safeContainer
@@ -348,7 +352,7 @@ function Window:Create(lib, config)
     })
     local prevGrad, prevStr, prevTxt
 
-    local function setCatVis(idx, hov)
+    local function setCatVis(idx, hov, skipTweens)
         local data = ctx.TabButtons[idx]
         if not data or not ctx.ActiveTheme then return end
         local th = ctx.ActiveTheme
@@ -362,16 +366,20 @@ function Window:Create(lib, config)
             data.Button.BackgroundTransparency = 0.08
             data.Label.TextColor3 = Color3.fromRGB(255, 255, 255)
             data.Indicator.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-            Animations:Tween(data.Indicator, Animations.Fast, { Size = UDim2.new(0, 3.5, 0, 18) })
-            Animations:Tween(data.Label, Animations.Fast, { Position = UDim2.new(0, 16, 0, 10) })
+            if not skipTweens then
+                Animations:Tween(data.Indicator, Animations.Fast, { Size = UDim2.new(0, 3.5, 0, 18) })
+                Animations:Tween(data.Label, Animations.Fast, { Position = UDim2.new(0, 16, 0, 10) })
+            end
         else
             data.Gradient.Color = hov and th.ButtonHover or th.Button
             data.Stroke.Color = th.Stroke
             data.Stroke.Transparency = 0.40
             data.Button.BackgroundTransparency = 0.28
             data.Label.TextColor3 = th.Text
-            Animations:Tween(data.Indicator, Animations.Fast, { Size = UDim2.new(0, 0, 0, 18) })
-            Animations:Tween(data.Label, Animations.Fast, { Position = UDim2.new(0, 14, 0, 10) })
+            if not skipTweens then
+                Animations:Tween(data.Indicator, Animations.Fast, { Size = UDim2.new(0, 0, 0, 18) })
+                Animations:Tween(data.Label, Animations.Fast, { Position = UDim2.new(0, 14, 0, 10) })
+            end
         end
     end
 
@@ -430,6 +438,27 @@ function Window:Create(lib, config)
         end
     end
 
+    local pendingUnderlineUpdate = false
+
+    local function updatePageUnderline()
+        if not frm.Visible or not ctx.IsAlive then return end
+        local tw = pageLbl.TextBounds.X
+        if tw <= 0 and pageLbl.Text ~= "" and Utils and Utils.MeasureTextWidth then
+            tw = Utils:MeasureTextWidth(pageLbl.Text, pageLbl.TextSize, pageLbl.FontFace, pageLbl.Font)
+        end
+        pendingUnderlineUpdate = false
+        pgLine.Size = UDim2.new(0, 0, 0, 2.5)
+        Animations:Tween(pgLine, TweenInfo.new(0.32, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+            Size = UDim2.new(0, tw, 0, 2.5)
+        })
+    end
+
+    table.insert(ctx.Connections, frm:GetPropertyChangedSignal("Visible"):Connect(function()
+        if frm.Visible and (pendingUnderlineUpdate or pgLine.Size.X.Offset <= 1) then
+            task.defer(updatePageUnderline)
+        end
+    end))
+
     local function swapCat(idx)
         if sharedState.activeOpenedDropdown then
             sharedState.activeOpenedDropdown()
@@ -439,17 +468,16 @@ function Window:Create(lib, config)
             if d.Page then
                 d.Page.Visible = (i == idx)
             end
-            setCatVis(i, false)
+            setCatVis(i, ctx.TabButtons[i] and ctx.TabButtons[i].IsHovered == true, false)
         end
         if ctx.Tabs[idx] then
             pageLbl.Text = ctx.Tabs[idx].Title
+            pendingUnderlineUpdate = true
             task.spawn(function()
                 task.wait()
-                local tw = pageLbl.TextBounds.X
-                pgLine.Size = UDim2.new(0, 0, 0, 2.5)
-                Animations:Tween(pgLine, TweenInfo.new(0.32, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
-                    Size = UDim2.new(0, tw, 0, 2.5)
-                })
+                if frm.Visible then
+                    updatePageUnderline()
+                end
             end)
             if ctx.Tabs[idx].OnShow then
                 pcall(ctx.Tabs[idx].OnShow)
@@ -459,6 +487,9 @@ function Window:Create(lib, config)
 
     local function filterSearch(rawQuery)
         if not enableSearch then return end
+        if sharedState.activeOpenedDropdown then
+            sharedState.activeOpenedDropdown()
+        end
         local query = tostring(rawQuery or ""):lower():match("^%s*(.-)%s*$")
         local isSearching = (#query > 0)
         if clearBtn then clearBtn.Visible = isSearching end
@@ -623,7 +654,10 @@ function Window:Create(lib, config)
             if clearBarB then clearBarB.BackgroundColor3 = t.SubText end
         end
 
-        for i = 1, #ctx.Tabs do setCatVis(i, false) end
+        for i = 1, #ctx.Tabs do
+            local tabBtn = ctx.TabButtons[i]
+            setCatVis(i, tabBtn and tabBtn.IsHovered == true, isLiveTick == true)
+        end
         for _, subFn in ipairs(sharedState.themeSubscribers) do pcall(subFn, t, isLiveTick) end
     end
 
@@ -698,10 +732,16 @@ function Window:Create(lib, config)
         lbl.TextXAlignment = Enum.TextXAlignment.Left
         lbl.Text = tabData.Name
 
-        ctx.TabButtons[idx] = { Button = btn, Gradient = g, Stroke = s, Label = lbl, Indicator = ind }
+        ctx.TabButtons[idx] = { Button = btn, Gradient = g, Stroke = s, Label = lbl, Indicator = ind, IsHovered = false }
 
-        table.insert(ctx.Connections, btn.MouseEnter:Connect(function() setCatVis(idx, true) end))
-        table.insert(ctx.Connections, btn.MouseLeave:Connect(function() setCatVis(idx, false) end))
+        table.insert(ctx.Connections, btn.MouseEnter:Connect(function()
+            ctx.TabButtons[idx].IsHovered = true
+            setCatVis(idx, true)
+        end))
+        table.insert(ctx.Connections, btn.MouseLeave:Connect(function()
+            ctx.TabButtons[idx].IsHovered = false
+            setCatVis(idx, false)
+        end))
         table.insert(ctx.Connections, btn.MouseButton1Click:Connect(function() swapCat(idx) end))
         setCatVis(idx, false)
     end
@@ -725,12 +765,16 @@ function Window:Create(lib, config)
         sharedState.isOpn = false
     end
 
-    table.insert(ctx.Connections, tglBtn.MouseButton1Click:Connect(function()
-        local bSz = UDim2.new(0, 52, 0, 52)
-        Animations:Tween(tglBtn, Animations.Fast, { Size = UDim2.new(0, 45, 0, 45) })
-        task.delay(0.08, function() Animations:Tween(tglBtn, Animations.Fast, { Size = bSz }) end)
-        if sharedState.isOpn then closeUi() else openUi() end
-    end))
+    local function toggleUi()
+        if sharedState.isOpn then
+            closeUi()
+        else
+            openUi()
+        end
+        return sharedState.isOpn == true
+    end
+
+    table.insert(ctx.Connections, tglBtn.MouseButton1Click:Connect(toggleUi))
 
     if enableSearch and searchInp then
         table.insert(ctx.Connections, searchInp:GetPropertyChangedSignal("Text"):Connect(function()
@@ -858,6 +902,14 @@ function Window:Create(lib, config)
 
     function WinObj:SetVisible(vis)
         if vis then openUi() else closeUi() end
+    end
+
+    function WinObj:IsOpen()
+        return sharedState.isOpn == true
+    end
+
+    function WinObj:Toggle()
+        return toggleUi()
     end
 
     function WinObj:CreateTab(tabName, pageTitle)
@@ -1218,6 +1270,12 @@ function Window:Create(lib, config)
 
     function WinObj:Destroy()
         ctx.IsAlive = false
+        local activeLoader = WinObj._ActiveLoader or ctx.ActiveLoader
+        if activeLoader and type(activeLoader.Destroy) == "function" then
+            pcall(function() activeLoader:Destroy() end)
+        end
+        WinObj._ActiveLoader = nil
+        ctx.ActiveLoader = nil
         if rainbowConn then
             rainbowConn:Disconnect()
             rainbowConn = nil
