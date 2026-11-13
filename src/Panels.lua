@@ -5,12 +5,34 @@
 
 local Panels = {}
 
+local function elevateIdentity(utils)
+    if utils and utils.ElevateIdentity then
+        utils:ElevateIdentity(7)
+    else
+        local setId = setthreadidentity or set_thread_identity
+        if type(setId) == "function" then
+            pcall(setId, 7)
+        end
+    end
+end
+
+local function safeParent(utils, inst, parent)
+    if utils and utils.SafeParent then
+        return utils:SafeParent(inst, parent)
+    end
+    local ok = pcall(function()
+        inst.Parent = parent
+    end)
+    return ok
+end
+
 function Panels:SetupPriorityPanel(ctx, priorityPg, opts)
     opts = opts or {}
     local Animations = ctx.Animations
     local Utils = ctx.Utils
 
     local function renderPriorityPanel()
+        elevateIdentity(Utils)
         for _, child in ipairs(priorityPg:GetChildren()) do
             if child:IsA("Frame") then child:Destroy() end
         end
@@ -20,7 +42,7 @@ function Panels:SetupPriorityPanel(ctx, priorityPg, opts)
         local activeTheme = ctx.ActiveTheme
 
         for index, taskName in ipairs(list) do
-            local card = Instance.new("Frame", priorityPg)
+            local card = Instance.new("Frame")
             card.Size = UDim2.new(1, -2, 0, 50)
             card.BackgroundColor3 = activeTheme.CardBg
             card.BackgroundTransparency = 0.20
@@ -28,12 +50,13 @@ function Panels:SetupPriorityPanel(ctx, priorityPg, opts)
             card.LayoutOrder = index
             Utils:RoundCorner(card, 12)
 
-            local cardStroke = Instance.new("UIStroke", card)
+            local cardStroke = Instance.new("UIStroke")
             cardStroke.Color = (index == 1) and activeTheme.Accent or activeTheme.Stroke
             cardStroke.Thickness = (index == 1) and 1.5 or 1
             cardStroke.Transparency = (index == 1) and 0 or 0.35
+            cardStroke.Parent = card
 
-            local badge = Instance.new("TextLabel", card)
+            local badge = Instance.new("TextLabel")
             badge.Size = UDim2.new(0, 26, 0, 26)
             badge.Position = UDim2.new(0, 8, 0.5, -13)
             badge.BackgroundColor3 = (index == 1) and activeTheme.Accent or activeTheme.BoxBg
@@ -43,8 +66,9 @@ function Panels:SetupPriorityPanel(ctx, priorityPg, opts)
             badge.Text = "#" .. tostring(index)
             badge:SetAttribute("NoTrans", true)
             Utils:RoundCorner(badge, 999)
+            badge.Parent = card
 
-            local title = Instance.new("TextLabel", card)
+            local title = Instance.new("TextLabel")
             title.Size = UDim2.new(1, -125, 0, 18)
             title.Position = UDim2.new(0, 42, 0, 7)
             title.BackgroundTransparency = 1
@@ -54,8 +78,9 @@ function Panels:SetupPriorityPanel(ctx, priorityPg, opts)
             title.TextXAlignment = Enum.TextXAlignment.Left
             title.TextTruncate = Enum.TextTruncate.AtEnd
             title.Text = tostring(taskName)
+            title.Parent = card
 
-            local desc = Instance.new("TextLabel", card)
+            local desc = Instance.new("TextLabel")
             desc.Size = UDim2.new(1, -125, 0, 16)
             desc.Position = UDim2.new(0, 42, 0, 26)
             desc.BackgroundTransparency = 1
@@ -65,13 +90,15 @@ function Panels:SetupPriorityPanel(ctx, priorityPg, opts)
             desc.TextXAlignment = Enum.TextXAlignment.Left
             desc.TextTruncate = Enum.TextTruncate.AtEnd
             desc.Text = (index == 1 and "Highest Priority (Runs First)" or (index == #list and "Lowest Priority (Idle Fallback)" or "Active Task Priority"))
+            desc.Parent = card
 
-            local btnHolder = Instance.new("Frame", card)
+            local btnHolder = Instance.new("Frame")
             btnHolder.Size = UDim2.new(0, 68, 0, 28)
             btnHolder.Position = UDim2.new(1, -74, 0.5, -14)
             btnHolder.BackgroundTransparency = 1
+            btnHolder.Parent = card
 
-            local upBtn = Instance.new("TextButton", btnHolder)
+            local upBtn = Instance.new("TextButton")
             upBtn.Size = UDim2.new(0, 30, 0, 28)
             upBtn.Position = UDim2.new(0, 0, 0, 0)
             upBtn.BackgroundColor3 = (index > 1) and activeTheme.BoxBg or activeTheme.RowBg
@@ -82,13 +109,15 @@ function Panels:SetupPriorityPanel(ctx, priorityPg, opts)
             upBtn.Text = "▲"
             upBtn:SetAttribute("NoTrans", true)
             Utils:RoundCorner(upBtn, 8)
-            local upStr = Instance.new("UIStroke", upBtn)
+            local upStr = Instance.new("UIStroke")
             upStr.Color = activeTheme.Stroke
             upStr.Thickness = 1
             upStr.Transparency = (index > 1) and 0.30 or 0.65
-            Animations:AttachTactile(upBtn, ctx.Connections)
+            upStr.Parent = upBtn
+            Animations:AttachTactile(upBtn)
+            upBtn.Parent = btnHolder
 
-            local downBtn = Instance.new("TextButton", btnHolder)
+            local downBtn = Instance.new("TextButton")
             downBtn.Size = UDim2.new(0, 30, 0, 28)
             downBtn.Position = UDim2.new(0, 36, 0, 0)
             downBtn.BackgroundColor3 = (index < #list) and activeTheme.BoxBg or activeTheme.RowBg
@@ -99,30 +128,36 @@ function Panels:SetupPriorityPanel(ctx, priorityPg, opts)
             downBtn.Text = "▼"
             downBtn:SetAttribute("NoTrans", true)
             Utils:RoundCorner(downBtn, 8)
-            local downStr = Instance.new("UIStroke", downBtn)
+            local downStr = Instance.new("UIStroke")
             downStr.Color = activeTheme.Stroke
             downStr.Thickness = 1
             downStr.Transparency = (index < #list) and 0.30 or 0.65
-            Animations:AttachTactile(downBtn, ctx.Connections)
+            downStr.Parent = downBtn
+            Animations:AttachTactile(downBtn)
+            downBtn.Parent = btnHolder
 
             upBtn.MouseButton1Click:Connect(function()
+                elevateIdentity(Utils)
                 if index > 1 then
                     if opts.OnMoveUp then opts.OnMoveUp(index) end
-                    renderPriorityPanel()
+                    pcall(renderPriorityPanel)
                 end
             end)
 
             downBtn.MouseButton1Click:Connect(function()
+                elevateIdentity(Utils)
                 if index < #list then
                     if opts.OnMoveDown then opts.OnMoveDown(index) end
-                    renderPriorityPanel()
+                    pcall(renderPriorityPanel)
                 end
             end)
+
+            safeParent(Utils, card, priorityPg)
         end
     end
 
     table.insert(ctx.State.themeSubscribers, function(_, isLiveTick)
-        if not isLiveTick and priorityPg.Visible then renderPriorityPanel() end
+        if not isLiveTick and priorityPg.Visible then pcall(renderPriorityPanel) end
     end)
 
     return renderPriorityPanel
@@ -192,6 +227,7 @@ function Panels:SetupStealPanel(ctx, stealPanelPg, opts)
     local formatValue = opts.FormatValue or function(v) return tostring(v or 0) end
 
     local function renderStealPanel()
+        elevateIdentity(Utils)
         local savedCanvasY = spListScrl.CanvasPosition.Y
         for _, ch in ipairs(spListScrl:GetChildren()) do
             if ch:IsA("Frame") then ch:Destroy() end
@@ -202,7 +238,13 @@ function Panels:SetupStealPanel(ctx, stealPanelPg, opts)
             State.activeStealButtons = {}
         end
 
-        local eggItems = (opts.GetItems and opts.GetItems()) or {}
+        local rawItems = (opts.GetItems and opts.GetItems()) or {}
+        local eggItems = {}
+        if type(rawItems) == "table" then
+            for idx, entry in ipairs(rawItems) do
+                eggItems[idx] = entry
+            end
+        end
 
         table.sort(eggItems, function(a, b)
             if State.spSortChoice == "Value (Money/s)" then
@@ -221,7 +263,7 @@ function Panels:SetupStealPanel(ctx, stealPanelPg, opts)
         local activeTheme = ctx.ActiveTheme
 
         for i, item in ipairs(eggItems) do
-            local card = Instance.new("Frame", spListScrl)
+            local card = Instance.new("Frame")
             card.Size = UDim2.new(1, -4, 0, 50)
             card.BackgroundColor3 = activeTheme.CardBg
             card.BackgroundTransparency = 0.20
@@ -229,12 +271,13 @@ function Panels:SetupStealPanel(ctx, stealPanelPg, opts)
             card.LayoutOrder = i
             Utils:RoundCorner(card, 12)
 
-            local cStr = Instance.new("UIStroke", card)
+            local cStr = Instance.new("UIStroke")
             cStr.Thickness = 1
             cStr.Color = activeTheme.Stroke
             cStr.Transparency = 0.40
+            cStr.Parent = card
 
-            local img = Instance.new("ImageLabel", card)
+            local img = Instance.new("ImageLabel")
             img.Size = UDim2.new(0, 36, 0, 36)
             img.Position = UDim2.new(0, 7, 0.5, -18)
             img.BackgroundColor3 = activeTheme.RowBg
@@ -242,8 +285,9 @@ function Panels:SetupStealPanel(ctx, stealPanelPg, opts)
             img.BorderSizePixel = 0
             img.Image = tostring(item.Icon or "")
             Utils:RoundCorner(img, 8)
+            img.Parent = card
 
-            local nameLbl = Instance.new("TextLabel", card)
+            local nameLbl = Instance.new("TextLabel")
             nameLbl.Size = UDim2.new(1, -135, 0, 18)
             nameLbl.Position = UDim2.new(0, 48, 0, 7)
             nameLbl.BackgroundTransparency = 1
@@ -253,8 +297,9 @@ function Panels:SetupStealPanel(ctx, stealPanelPg, opts)
             nameLbl.TextXAlignment = Enum.TextXAlignment.Left
             nameLbl.TextTruncate = Enum.TextTruncate.AtEnd
             nameLbl.Text = string.format("%s [%s]", tostring(item.Name or "Egg"), tostring(item.Rarity or "Common"))
+            nameLbl.Parent = card
 
-            local subLbl = Instance.new("TextLabel", card)
+            local subLbl = Instance.new("TextLabel")
             subLbl.Size = UDim2.new(1, -135, 0, 16)
             subLbl.Position = UDim2.new(0, 48, 0, 26)
             subLbl.BackgroundTransparency = 1
@@ -263,8 +308,9 @@ function Panels:SetupStealPanel(ctx, stealPanelPg, opts)
             subLbl.TextColor3 = activeTheme.SubText
             subLbl.TextXAlignment = Enum.TextXAlignment.Left
             subLbl.Text = string.format("%s  |  %.2fx  |  %s", formatValue(item.Value or 0), tonumber(item.Scale) or 1, tostring(item.Area or "Unknown"))
+            subLbl.Parent = card
 
-            local actBtn = Instance.new("TextButton", card)
+            local actBtn = Instance.new("TextButton")
             actBtn.Size = UDim2.new(0, 76, 0, 28)
             actBtn.Position = UDim2.new(1, -82, 0.5, -14)
             actBtn.BorderSizePixel = 0
@@ -272,30 +318,35 @@ function Panels:SetupStealPanel(ctx, stealPanelPg, opts)
             actBtn.TextSize = 11.5
             actBtn:SetAttribute("NoTrans", true)
             Utils:RoundCorner(actBtn, 999)
-            Animations:AttachTactile(actBtn, ctx.Connections)
+            Animations:AttachTactile(actBtn)
 
             local isThisTarget = (State.targetedSpecificUid == item.Uid)
             actBtn.BackgroundColor3 = isThisTarget and Color3.fromRGB(240, 65, 60) or activeTheme.Accent
             actBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
             actBtn.Text = isThisTarget and "Stop Steal" or "Steal"
+            actBtn.Parent = card
 
             State.activeStealButtons[item.Uid] = actBtn
 
             actBtn.MouseButton1Click:Connect(function()
+                elevateIdentity(Utils)
                 if opts.OnSelectItem then
                     opts.OnSelectItem(item, actBtn)
                 end
             end)
+
+            safeParent(Utils, card, spListScrl)
         end
         spListScrl.CanvasPosition = Vector2.new(0, savedCanvasY)
     end
 
     local spSortOptions = opts.SortOptions or { "Value (Money/s)", "Rarity", "Weight (Scale)" }
     table.insert(ctx.Connections, spSortBtn.MouseButton1Click:Connect(function()
+        elevateIdentity(Utils)
         State.spSortIndex = ((State.spSortIndex or 1) % #spSortOptions) + 1
         State.spSortChoice = spSortOptions[State.spSortIndex]
         spSortBtn.Text = State.spSortChoice .. "  v"
-        renderStealPanel()
+        pcall(renderStealPanel)
     end))
 
     return renderStealPanel

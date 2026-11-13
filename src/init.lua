@@ -8,6 +8,23 @@ local SyntaxisLib = {
     RepoBaseUrl = "https://raw.githubusercontent.com/quantumdingle123/GUILib/main/src/"
 }
 
+local function fetchRemoteSource(url)
+    local lastErr
+    for attempt = 1, 2 do
+        local ok, res = pcall(function()
+            return game:HttpGet(url)
+        end)
+        if ok and type(res) == "string" and #res > 0 then
+            return res
+        end
+        lastErr = res
+        if attempt < 2 then
+            task.wait(0.15)
+        end
+    end
+    error("[SyntaxisLib] Failed to download module (" .. tostring(url) .. "): " .. tostring(lastErr))
+end
+
 local function loadModule(name)
     if script and script:FindFirstChild(name) then
         return require(script:FindFirstChild(name))
@@ -16,7 +33,7 @@ local function loadModule(name)
         return SyntaxisLib._Preloaded[name]()
     end
     local url = SyntaxisLib.RepoBaseUrl .. name .. ".lua"
-    local src = game:HttpGet(url)
+    local src = fetchRemoteSource(url)
     local fn, err = loadstring(src, "SyntaxisLib." .. name)
     if not fn then
         error("[SyntaxisLib] Failed to compile module " .. tostring(name) .. ": " .. tostring(err))
@@ -74,11 +91,25 @@ function SyntaxisLib:CreateWindow(config)
             ToggleOrbSize = toggleOrbSize
         })
 
+        window._ActiveLoader = loader
+        if window.Context then
+            window.Context.ActiveLoader = loader
+        end
+
         loader:OnComplete(function()
-            if window and window.MainFrame then
+            if window then
+                window._ActiveLoader = nil
+                if window.Context then
+                    window.Context.ActiveLoader = nil
+                end
+            end
+            if not window or (window.Context and not window.Context.IsAlive) then
+                return
+            end
+            if window.MainFrame and window.MainFrame.Parent then
                 window.MainFrame.Visible = true
             end
-            if toggleOrb then
+            if toggleOrb and toggleOrb.Parent then
                 toggleOrb.Visible = true
             end
         end)

@@ -78,7 +78,7 @@ end)
 -- Add a Keybind (with tactile spring animations & live in-game keypress reflection)
 CatSteal:CreateKeybind("Menu Keybind", "Press key to toggle GUI", Enum.KeyCode.RightControl, function(key, isPressed)
     if isPressed then
-        Window:SetVisible(not Window.MainFrame.Visible)
+        Window:Toggle()
     else
         print("Keybind bound to:", key)
     end
@@ -124,7 +124,7 @@ Window:Initialize()
 | Method | Description | Return Object Methods |
 | :--- | :--- | :--- |
 | `SyntaxisLib:CreateWindow(config)` | Creates the main UI window (supports `ShowLoader`, `GameName`, `Theme`, `LoaderDuration`, `LoaderBlur`, `LoaderBlurSize`, `LoaderSteps`, `MorphToWindow`) | Window instance |
-| `SyntaxisLib:CreateLoader(config)` | Standalone Centered Monolith loader with iOS `BlurEffect` scrim | `:SetProgress(ratio, status, stepLabel)`, `:OnComplete(fn)`, `:Dismiss(cb)` |
+| `SyntaxisLib:CreateLoader(config)` | Standalone Centered Monolith loader with iOS `BlurEffect` scrim | `:SetProgress(ratio, status, stepLabel)`, `:OnComplete(fn)`, `:Dismiss(cb)`, `:Destroy()` |
 | `Window:CreateTab(name, title)` | Creates a sidebar tab and scrollable page | `:CreateCategory(title, defaultOpen, order)` |
 | `Category:CreateToggle(title, desc, default, callback)` | High-contrast iOS switch control | `:GetValue()`, `:SetValue(bool, fireCallback)` |
 | `Category:CreateKeybind(title, desc, defaultKey, callback, order)` | Tactile keybind badge with listening mode, spring confirm, Esc unbind, & live gameplay reflection | `:GetKey()`, `:SetKey(keyCode, fireCallback)`, `:OnPress(fn)`, `Button`, `Instance` |
@@ -144,7 +144,8 @@ Window:Initialize()
 | `Window:ShowWarningModal(title, text)` | Displays an iOS alert modal | — |
 | `Window:ShowDiscordModal(inviteUrl)` | Displays the Discord community modal | — |
 | `Window:Notify({ Title, Content, Duration })` | Displays a bottom-right toast notification | — |
-| `Window:Destroy()` | Disconnects all events, stops Rainbow heartbeat, and destroys the GUI | — |
+| `Window:Toggle()` / `IsOpen()` / `SetVisible(vis)` | Toggles or queries logical window open state safely (no close-tween race) | `boolean` (for `Toggle`/`IsOpen`) |
+| `Window:Destroy()` | Cancels any active loader, disconnects events, stops Rainbow heartbeat, and destroys the GUI | — |
 
 ### Keybind Details & Callback Signatures
 

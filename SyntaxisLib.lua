@@ -92,11 +92,25 @@ function SyntaxisLib:CreateWindow(config)
             ToggleOrbSize = toggleOrbSize
         })
 
+        window._ActiveLoader = loader
+        if window.Context then
+            window.Context.ActiveLoader = loader
+        end
+
         loader:OnComplete(function()
-            if window and window.MainFrame then
+            if window then
+                window._ActiveLoader = nil
+                if window.Context then
+                    window.Context.ActiveLoader = nil
+                end
+            end
+            if not window or (window.Context and not window.Context.IsAlive) then
+                return
+            end
+            if window.MainFrame and window.MainFrame.Parent then
                 window.MainFrame.Visible = true
             end
-            if toggleOrb then
+            if toggleOrb and toggleOrb.Parent then
                 toggleOrb.Visible = true
             end
         end)

@@ -10,6 +10,33 @@ local UserInputService = game:GetService("UserInputService")
 
 local Utils = {}
 
+function Utils:ElevateIdentity(level)
+    local setId = setthreadidentity or set_thread_identity
+    if type(setId) == "function" then
+        pcall(setId, level or 7)
+    end
+end
+
+function Utils:SafeParent(inst, parent)
+    if not inst then return false end
+    local ok = pcall(function()
+        inst.Parent = parent
+    end)
+    return ok
+end
+
+function Utils:ProtectGui(gui)
+    if not gui then return end
+    pcall(function()
+        gui:SetAttribute("SyntaxisInstance", true)
+    end)
+    if typeof(syn) == "table" and typeof(syn.protect_gui) == "function" then
+        pcall(syn.protect_gui, gui)
+    elseif typeof(protectgui) == "function" then
+        pcall(protectgui, gui)
+    end
+end
+
 function Utils:GetSafeParent()
     if RunService:IsStudio() then
         local lp = Players.LocalPlayer or Players.PlayerAdded:Wait()
@@ -112,8 +139,17 @@ function Utils:BindSliderDrag(handles, track, connList, onDrag, onEnd)
     local activeTouch = nil
     local touchScroll = nil
     local touchScrollWasEnabled = nil
+    local activeStateConn = nil
+
+    local function disconnectStateConn()
+        if activeStateConn then
+            pcall(function() activeStateConn:Disconnect() end)
+            activeStateConn = nil
+        end
+    end
 
     local function finishDrag()
+        disconnectStateConn()
         if not dragging then return end
         dragging = false
         dragInputType = nil
@@ -149,16 +185,14 @@ function Utils:BindSliderDrag(handles, track, connList, onDrag, onEnd)
 
         if onDrag then onDrag(input.Position) end
 
-        local cState
-        cState = input.Changed:Connect(function()
+        disconnectStateConn()
+        activeStateConn = input.Changed:Connect(function()
             if not track or not track.Parent or input.UserInputState == Enum.UserInputState.End or input.UserInputState == Enum.UserInputState.Cancel then
-                if cState then cState:Disconnect(); cState = nil end
                 finishDrag()
             elseif dragging and uType == Enum.UserInputType.Touch and input == activeTouch and input.UserInputState == Enum.UserInputState.Change then
                 if onDrag then onDrag(input.Position) end
             end
         end)
-        if connList then table.insert(connList, cState) end
     end
 
     for _, handle in ipairs(handles) do
@@ -194,10 +228,17 @@ function Utils:BindSliderDrag(handles, track, connList, onDrag, onEnd)
         finishDrag()
     end)
 
+    local cCleanup = {
+        Disconnect = function()
+            finishDrag()
+        end
+    }
+
     if connList then
         table.insert(connList, cMove)
         table.insert(connList, cEnd)
         table.insert(connList, cFocus)
+        table.insert(connList, cCleanup)
     end
 end
 
