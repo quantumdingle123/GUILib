@@ -6,9 +6,11 @@ A modular, reusable iOS / Liquid Glass UI library for Roblox Luau scripts. Desig
 
 ## What's New in v2.3.0
 
-- 🧊 **Centered Monolith Loading Screen (`Loader.lua`)**: Enable seamlessly via `ShowLoader = true` in `SyntaxisLib:CreateWindow(config)` or construct standalone via `SyntaxisLib:CreateLoader(config)`. Features an iOS-style `Lighting.BlurEffect` depth backdrop, full-bleed dark scrim, emblem badge, tabular percentage telemetry, and a zero-teleport morph directly into the main window and `ToggleOrb`.
-- 🎨 **8 Built-In Themes & Live Animated `Rainbow` (`Themes.lua`, `Window.lua`)**: Expands the palette selector to a non-scrolling `2 × 4` grid of un-mixed full-bleed swatches (`Sapphire`, `Emerald`, `Ruby`, `Amethyst`, `Midnight`, `Amber`, `Obsidian`, and live-cycling `Rainbow`) with active outline stroke and left accent indicator.
-- 🔢 **Stabilized Tabular Numerals & Layout Reservation (`Utils.lua`)**: `Utils:ApplyTabularFont` (`RobotoMono`) paired with `Utils:CreateNumericFormatter` pre-computes fixed `ReservedWidth` from `[min, max, increment, suffix]` ranges so live scaling readouts, transparency percentages, and loader progress never jitter or push neighboring labels.
+- 🧊 **Centered Monolith Loading Screen (`Loader.lua`)**: Enable seamlessly via `ShowLoader = true` in `SyntaxisLib:CreateWindow(config)` or construct standalone via `SyntaxisLib:CreateLoader(config)`. Features an iOS-style `Lighting.BlurEffect` depth backdrop (handing off cleanly to `Window` blur), full-bleed dark scrim, emblem badge, tabular percentage telemetry, and a zero-teleport morph directly into the main window and `ToggleOrb`.
+- 📡 **Top-Right Draggable Status Bar & Nearby Players Drawer (`StatusBar.lua`)**: Floating pill displaying LocalPlayer avatar, live Ping (`ms`), FPS (`fps`), and player count (`PlayersButton`), plus an animated scrollable `Nearby players` distance list (`you`, `m` via `StudsToMeters`, `--` fallback), responsive `UIScale` viewport clamping, normalized drag position persistence, and live theme / closed-window `Rainbow` sync.
+- 🖤 **Squircle Toggle Orb & Adaptive Blur (`Window.lua`)**: Black squircle toggle button with monochrome S-emblem (`ToggleIcon`, `ToggleIconTint`) synced cleanly to every theme accent separately from the loader emblem, plus `BackgroundBlur` / `BackgroundBlurSize` window focus depth (`Window:SetBlur`, `GetBlur`).
+- 🎨 **14 Built-In Themes & Live Animated `Rainbow` (`Themes.lua`, `Window.lua`)**: Expanded palette selector in a scrollable 2-column grid (`Sapphire`, `Emerald`, `Ruby`, `Amethyst`, `Midnight`, `Amber`, `Obsidian`, `Sakura`, `Glacier`, `Sunset`, `Frost`, `Vapor`, `Mint`, and live-cycling `Rainbow`) with active outline stroke and left accent indicator.
+- 🔢 **Stabilized Tabular Numerals & Layout Reservation (`Utils.lua`)**: `Utils:ApplyTabularFont` (`RobotoMono`) paired with `Utils:CreateNumericFormatter` pre-computes fixed `ReservedWidth` from `[min, max, increment, suffix]` ranges so live scaling readouts, transparency percentages, status telemetry, and loader progress never jitter or push neighboring labels.
 - ✨ **Interaction & Layout Refinements**: Crisp vector `X` search clear button, continuous pointer/touch slider dragging (`Utils:BindSliderDrag`), non-clipping textbox placeholders, cleanly anchored floating dropdown menus, and symmetric rounding (`Utils:RoundToDecimals`) across negative and fractional slider ranges.
 
 ### Included from v2.2.0
@@ -28,13 +30,14 @@ GUILib/
 └── src/                    # Modular source files
     ├── init.lua            # Modular loader entrypoint, version metadata, & ShowLoader orchestration
     ├── Loader.lua          # Centered Monolith splash screen, iOS Blur backdrop, & window morph
-    ├── Themes.lua          # 8 iOS Liquid Glass palettes (Sapphire, Emerald, Ruby, Amethyst, Midnight, Amber, Obsidian, Rainbow)
+    ├── StatusBar.lua       # Draggable top-right telemetry pill & expandable Nearby players drawer
+    ├── Themes.lua          # 14 iOS Liquid Glass palettes (Sapphire..Mint & live Rainbow)
     ├── Animations.lua      # TweenService presets & tactile button scale feedback
     ├── Utils.lua           # Safe GUI parenting, UICorner, UIGradient, multi-device slider drag, & tabular numeric formatters
     ├── Modals.lua          # Warning modals, Discord invite modal, & toast notifications
     ├── Components.lua      # Categories, Toggles, Sliders, Dropdowns, Multi-Dropdowns, Buttons, Textboxes, Keybinds, Labels, Separators
     ├── Panels.lua          # Dynamic Task Priority panel & live Steal Panel list view (with live Rainbow sync)
-    └── Window.lua          # Main window frame, sidebar navigation, search bar, 2x4 theme grid, transparency engine, & cleanup
+    └── Window.lua          # Main window frame, squircle toggle orb, blur engine, search bar, 2-column theme grid, transparency engine, & cleanup
 ```
 
 ---
@@ -103,7 +106,7 @@ CatSteal:CreateSlider("Min Scale", "Minimum size multiplier", 1, 10, 1, 0.5, fun
     print("Min Scale:", value)
 end)
 
--- Add Settings Tab (2x4 Theme Grid + Transparency Slider)
+-- Add Settings Tab (14-Theme 2-Column Grid + Transparency Slider)
 Window:CreateSettingsTab("Settings", "Settings", {
     OnThemeSelected = function(themeName)
         print("Saved theme:", themeName)
@@ -123,7 +126,7 @@ Window:Initialize()
 
 | Method | Description | Return Object Methods |
 | :--- | :--- | :--- |
-| `SyntaxisLib:CreateWindow(config)` | Creates the main UI window (supports `ShowLoader`, `GameName`, `Theme`, `LoaderDuration`, `LoaderBlur`, `LoaderBlurSize`, `LoaderSteps`, `MorphToWindow`) | Window instance |
+| `SyntaxisLib:CreateWindow(config)` | Creates the main UI window (supports `ShowLoader`, `GameName`, `Theme`, `LoaderDuration`, `LoaderBlur`, `LoaderBlurSize`, `LoaderSteps`, `MorphToWindow`, `ToggleIcon`, `ToggleIconTint`, `BackgroundBlur`, `BackgroundBlurSize`, `BlurParent`, `StatusBar`, `StatusBarVisible`, `StatusBarPosition`, `StudsToMeters`) | Window instance |
 | `SyntaxisLib:CreateLoader(config)` | Standalone Centered Monolith loader with iOS `BlurEffect` scrim | `:SetProgress(ratio, status, stepLabel)`, `:OnComplete(fn)`, `:Dismiss(cb)`, `:Destroy()` |
 | `Window:CreateTab(name, title)` | Creates a sidebar tab and scrollable page | `:CreateCategory(title, defaultOpen, order)` |
 | `Category:CreateToggle(title, desc, default, callback)` | High-contrast iOS switch control | `:GetValue()`, `:SetValue(bool, fireCallback)` |
@@ -137,15 +140,18 @@ Window:Initialize()
 | `Category:CreateSeparator()` | Subtle horizontal divider line | `Frame` |
 | `Window:CreatePriorityTab(name, title, opts)` | Dynamic reorderable task priority list | `:Render()` |
 | `Window:CreateStealPanelTab(name, title, opts)` | Dynamic sortable item scanner panel | `:Render()` |
-| `Window:CreateSettingsTab(name, title, opts)` | Built-in 8-theme `2 × 4` selector & transparency slider | `Page`, `Index` |
+| `Window:CreateSettingsTab(name, title, opts)` | Built-in 14-theme scrollable selector & transparency slider | `Page`, `Index` |
 | `Window:SetTheme(themeName)` / `Window:GetActiveTheme()` | Switches or inspects the active theme palette (supports animated `Rainbow`) | — |
 | `Window:SetTransparency(percent)` | Sets glass card transparency percentage (`0–100`) | — |
+| `Window:SetBlur(enabled, size)` / `GetBlur()` | Configures or queries the active `BlurEffect` focus backdrop | `boolean, number` |
+| `Window:SetStatusBarVisible(vis)` / `IsStatusBarVisible()` | Shows or hides the draggable top-right telemetry status bar | `boolean` (for `IsStatusBarVisible`) |
+| `Window:SetStatusBarExpanded(expand)` / `GetStatusBar()` | Programmatically opens/collapses the Nearby players drawer or returns the status bar object | `StatusBarObj` |
 | `Window:SetSearch(query)` / `ClearSearch()` / `GetSearch()` | Programmatically filters, clears, or queries the search bar | `string` (for `GetSearch`) |
 | `Window:ShowWarningModal(title, text)` | Displays an iOS alert modal | — |
 | `Window:ShowDiscordModal(inviteUrl)` | Displays the Discord community modal | — |
 | `Window:Notify({ Title, Content, Duration })` | Displays a bottom-right toast notification | — |
 | `Window:Toggle()` / `IsOpen()` / `SetVisible(vis)` | Toggles or queries logical window open state safely (no close-tween race) | `boolean` (for `Toggle`/`IsOpen`) |
-| `Window:Destroy()` | Cancels any active loader, disconnects events, stops Rainbow heartbeat, and destroys the GUI | — |
+| `Window:Destroy()` | Cancels any active loader, destroys Blur & StatusBar, disconnects events, stops Rainbow heartbeat, and destroys the GUI | — |
 
 ### Keybind Details & Callback Signatures
 

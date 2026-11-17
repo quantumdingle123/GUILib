@@ -5,6 +5,22 @@
 
 local RunService = game:GetService("RunService")
 
+local WINDOW_BLUR_NAME = "Syntaxis_WindowBlur"
+local DEFAULT_LOADER_ICON = "rbxassetid://71471996876777"
+local DEFAULT_TOGGLE_ICON = "rbxassetid://124076227136175"
+local ORB_BLACK_BG = Color3.fromRGB(15, 15, 18)
+
+local function resolveOrbAccent(theme)
+    local accent = (theme and theme.Accent) or Color3.fromRGB(64, 168, 255)
+    local luma = accent.R * 0.299 + accent.G * 0.587 + accent.B * 0.114
+    if luma < 0.45 and theme then
+        local fallback = theme.Accent2 or theme.GlassRim or Color3.fromRGB(228, 234, 244)
+        local rim = theme.GlassRim or Color3.fromRGB(255, 255, 255)
+        return fallback:Lerp(rim, 0.35)
+    end
+    return accent
+end
+
 local Window = {}
 
 function Window:Create(lib, config)
@@ -37,6 +53,23 @@ function Window:Create(lib, config)
                     if child:GetAttribute("SyntaxisInstance") == true
                        or (rawGuiName and child.Name == rawGuiName)
                        or child.Name == "SyntaxHubGUI" then
+                        child:Destroy()
+                    end
+                end)
+            end
+        end
+    end
+
+    local okLighting, resolvedBlurParent = pcall(function()
+        return config.BlurParent or game:GetService("Lighting")
+    end)
+    local blurParent = (okLighting and typeof(resolvedBlurParent) == "Instance") and resolvedBlurParent or nil
+    if blurParent then
+        local okBlurChildren, blurChildren = pcall(function() return blurParent:GetChildren() end)
+        if okBlurChildren and type(blurChildren) == "table" then
+            for _, child in ipairs(blurChildren) do
+                pcall(function()
+                    if child:IsA("BlurEffect") and child.Name == WINDOW_BLUR_NAME then
                         child:Destroy()
                     end
                 end)
@@ -248,22 +281,42 @@ function Window:Create(lib, config)
         Utils:RoundCorner(clearBarB, 999)
     end
 
-    local tglBtn = Instance.new("ImageButton", mainUI)
+    local legacyCustomIcon = (config.Icon and config.Icon ~= DEFAULT_LOADER_ICON) and config.Icon or nil
+    local orbIconAsset = config.ToggleIcon or legacyCustomIcon or DEFAULT_TOGGLE_ICON
+    local shouldTintOrbIcon = (config.ToggleIconTint ~= nil) and (config.ToggleIconTint == true) or (orbIconAsset == DEFAULT_TOGGLE_ICON)
+    local initialOrbAccent = resolveOrbAccent(activeTheme)
+
+    local tglBtn = Instance.new("TextButton", mainUI)
     tglBtn.Name = "Toggle"
+    tglBtn.AnchorPoint = Vector2.new(0.5, 0.5)
     tglBtn.Size = UDim2.new(0, 52, 0, 52)
-    tglBtn.Position = UDim2.new(0, 18, 0.5, -26)
-    tglBtn.BackgroundColor3 = Color3.fromRGB(32, 60, 110)
-    tglBtn.BackgroundTransparency = 0.12
+    tglBtn.Position = UDim2.new(0, 44, 0.5, 0)
+    tglBtn.BackgroundColor3 = ORB_BLACK_BG
+    tglBtn.BackgroundTransparency = 0.05
     tglBtn.BorderSizePixel = 0
-    tglBtn.Image = config.Icon or "rbxassetid://71471996876777"
+    tglBtn.Text = ""
     tglBtn.AutoButtonColor = false
-    Utils:RoundCorner(tglBtn, 999)
+    tglBtn.ClipsDescendants = true
+    local tglCorner = Utils:RoundCorner(tglBtn, 14)
+    tglCorner.CornerRadius = UDim.new(0.27, 0)
     Animations:AttachTactile(tglBtn, ctx.Connections)
 
     local tglStr = Instance.new("UIStroke", tglBtn)
-    tglStr.Thickness = 1.5
-    tglStr.Transparency = 0.20
-    tglStr.Color = activeTheme.Accent
+    tglStr.Thickness = 2.5
+    tglStr.Transparency = 0
+    tglStr.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    tglStr.Color = initialOrbAccent
+
+    local tglIcon = Instance.new("ImageLabel", tglBtn)
+    tglIcon.Name = "Emblem"
+    tglIcon.AnchorPoint = Vector2.new(0.5, 0.5)
+    tglIcon.Position = UDim2.fromScale(0.5, 0.5)
+    tglIcon.Size = UDim2.fromScale(0.76, 0.76)
+    tglIcon.BackgroundTransparency = 1
+    tglIcon.BorderSizePixel = 0
+    tglIcon.ScaleType = Enum.ScaleType.Fit
+    tglIcon.Image = orbIconAsset
+    tglIcon.ImageColor3 = shouldTintOrbIcon and initialOrbAccent or Color3.new(1, 1, 1)
 
     local side = Instance.new("Frame", frm)
     side.Name = "Sidebar"
@@ -341,6 +394,7 @@ function Window:Create(lib, config)
     ctx.PagesHolder = pgsHold
     ctx.PopupLayer = popupLayer
     ctx.ToggleOrb = tglBtn
+    ctx.ToggleIcon = tglIcon
 
     local okParent, parentResultOrErr = false, "Utils.SafeParentScreenGui unavailable"
     if Utils and Utils.SafeParentScreenGui then
@@ -361,8 +415,54 @@ function Window:Create(lib, config)
         error(msg)
     end
 
+    local destroyBlurFn = nil
+    local destroyStatusBarFn = nil
+    local okDestroyConn, destroyConn = pcall(function()
+        return mainUI.Destroying:Connect(function()
+            ctx.IsAlive = false
+            if destroyBlurFn then destroyBlurFn() end
+            if destroyStatusBarFn then destroyStatusBarFn() end
+        end)
+    end)
+    if okDestroyConn and destroyConn then
+        table.insert(ctx.Connections, destroyConn)
+    end
+    local okAncestryConn, ancestryConn = pcall(function()
+        return mainUI.AncestryChanged:Connect(function(_, newParent)
+            if newParent == nil then
+                ctx.IsAlive = false
+                if destroyBlurFn then destroyBlurFn() end
+                if destroyStatusBarFn then destroyStatusBarFn() end
+            end
+        end)
+    end)
+    if okAncestryConn and ancestryConn then
+        table.insert(ctx.Connections, ancestryConn)
+    end
+
     Utils:MakeDraggable(topBar, frm, ctx.Connections)
     Utils:MakeDraggable(tglBtn, tglBtn, ctx.Connections)
+
+    local statusBar = nil
+    if config.StatusBar ~= false and lib and lib.StatusBar and type(lib.StatusBar.Create) == "function" then
+        local okSb, sbOrErr = pcall(function()
+            return lib.StatusBar:Create(ctx, config)
+        end)
+        if okSb and sbOrErr then
+            statusBar = sbOrErr
+            ctx.StatusBar = sbOrErr
+            destroyStatusBarFn = function()
+                if statusBar and type(statusBar.Destroy) == "function" then
+                    local targetSb = statusBar
+                    statusBar = nil
+                    ctx.StatusBar = nil
+                    pcall(function() targetSb:Destroy() end)
+                end
+            end
+        elseif not okSb then
+            warn("[SyntaxisLib] StatusBar init failed: " .. tostring(sbOrErr))
+        end
+    end
 
     local semiBoldWeight = nil
     pcall(function() semiBoldWeight = Enum.FontWeight.SemiBold end)
@@ -644,8 +744,12 @@ function Window:Create(lib, config)
         frmStr.Color = t.GlassRim or t.Stroke
         sideStr.Color = t.Stroke
         cntStr.Color = t.Stroke
-        tglBtn.BackgroundColor3 = t.CardBg
-        tglStr.Color = t.Accent
+        local orbAccent = resolveOrbAccent(t)
+        tglBtn.BackgroundColor3 = ORB_BLACK_BG
+        tglStr.Color = orbAccent
+        if shouldTintOrbIcon then
+            tglIcon.ImageColor3 = orbAccent
+        end
         pgLine.BackgroundColor3 = t.Accent
         innerGrad.Color = ColorSequence.new{
             ColorSequenceKeypoint.new(0, t.Accent2),
@@ -716,7 +820,21 @@ function Window:Create(lib, config)
                     end
                     return
                 end
-                if not frm.Visible then return end
+                if not frm.Visible then
+                    local now = os.clock()
+                    if now - lastTick < 0.04 then return end
+                    lastTick = now
+                    local liveSnap = Themes:GetRainbowSnapshot(now * 0.16)
+                    local liveOrbAccent = resolveOrbAccent(liveSnap)
+                    tglStr.Color = liveOrbAccent
+                    if shouldTintOrbIcon then
+                        tglIcon.ImageColor3 = liveOrbAccent
+                    end
+                    if statusBar and type(statusBar.ApplyThemeColors) == "function" then
+                        statusBar:ApplyThemeColors(liveSnap)
+                    end
+                    return
+                end
                 local now = os.clock()
                 if now - lastTick < 0.04 then return end
                 lastTick = now
@@ -773,12 +891,160 @@ function Window:Create(lib, config)
         setCatVis(idx, false)
     end
 
+    local blurEnabled = (config.BackgroundBlur ~= false)
+    local blurSize = math.clamp(tonumber(config.BackgroundBlurSize) or 16, 0, 56)
+    local deferInitialBlur = (config._DeferInitialBlur == true)
+    local windowBlur = nil
+    local blurTween = nil
+
+    local function destroyBlur()
+        if blurTween then
+            pcall(function() blurTween:Cancel() end)
+            blurTween = nil
+        end
+        if windowBlur then
+            local target = windowBlur
+            windowBlur = nil
+            ctx.WindowBlur = nil
+            pcall(function() target:Destroy() end)
+        end
+    end
+    destroyBlurFn = destroyBlur
+
+    local function ensureWindowBlur(initialSize)
+        if windowBlur then
+            local okAlive, hasParent = pcall(function()
+                return windowBlur.Parent ~= nil
+            end)
+            if okAlive and hasParent then
+                return windowBlur
+            end
+            windowBlur = nil
+            ctx.WindowBlur = nil
+        end
+        if not blurParent then return nil end
+        local okBlur, created = pcall(function()
+            local b = Instance.new("BlurEffect")
+            b.Name = WINDOW_BLUR_NAME
+            b.Size = initialSize or 0
+            b.Enabled = (initialSize or 0) > 0
+            pcall(function() b:SetAttribute("SyntaxisInstance", true) end)
+            b.Parent = blurParent
+            return b
+        end)
+        if okBlur and created then
+            windowBlur = created
+            ctx.WindowBlur = created
+            return created
+        end
+        return nil
+    end
+
+    local function shouldBlurBeActive()
+        return ctx.IsAlive
+            and (not deferInitialBlur)
+            and blurEnabled
+            and (blurSize > 0)
+            and (sharedState.isOpn == true)
+    end
+
+    local function syncWindowBlur(skipTween)
+        if blurTween then
+            pcall(function() blurTween:Cancel() end)
+            blurTween = nil
+        end
+
+        local active = shouldBlurBeActive()
+        if active then
+            local initial = skipTween and blurSize or 0
+            if windowBlur then
+                pcall(function()
+                    if windowBlur.Parent ~= nil and windowBlur.Enabled then
+                        initial = windowBlur.Size
+                    end
+                end)
+            end
+            local blur = ensureWindowBlur(initial)
+            if not blur then return end
+
+            pcall(function()
+                blur.Enabled = true
+            end)
+            if skipTween then
+                pcall(function()
+                    blur.Size = blurSize
+                end)
+            else
+                local thisTween = nil
+                pcall(function()
+                    thisTween = Animations:Tween(blur, Animations.Smooth, { Size = blurSize })
+                end)
+                blurTween = thisTween
+                if thisTween then
+                    pcall(function()
+                        thisTween.Completed:Connect(function(playbackState)
+                            if blurTween == thisTween and playbackState == Enum.PlaybackState.Completed then
+                                blurTween = nil
+                            end
+                        end)
+                    end)
+                else
+                    pcall(function()
+                        blur.Size = blurSize
+                    end)
+                end
+            end
+        else
+            if not windowBlur then return end
+            local okParent, hasParent = pcall(function() return windowBlur.Parent ~= nil end)
+            if not okParent or not hasParent then
+                windowBlur = nil
+                ctx.WindowBlur = nil
+                return
+            end
+            if skipTween then
+                pcall(function()
+                    windowBlur.Size = 0
+                    windowBlur.Enabled = false
+                end)
+            else
+                local thisTween = nil
+                pcall(function()
+                    thisTween = Animations:Tween(windowBlur, Animations.Smooth, { Size = 0 })
+                end)
+                blurTween = thisTween
+                if thisTween then
+                    pcall(function()
+                        thisTween.Completed:Connect(function(playbackState)
+                            if blurTween ~= thisTween or playbackState ~= Enum.PlaybackState.Completed then
+                                return
+                            end
+                            blurTween = nil
+                            if not shouldBlurBeActive() and windowBlur then
+                                pcall(function()
+                                    windowBlur.Size = 0
+                                    windowBlur.Enabled = false
+                                end)
+                            end
+                        end)
+                    end)
+                else
+                    pcall(function()
+                        windowBlur.Size = 0
+                        windowBlur.Enabled = false
+                    end)
+                end
+            end
+        end
+    end
+
     local opnSz = frm.Size
     local function openUi()
         frm.Visible = true
         frm.Size = UDim2.new(0, 0, 0, 0)
         Animations:Tween(frm, Animations.Smooth, { Size = opnSz })
         sharedState.isOpn = true
+        syncWindowBlur(false)
     end
 
     local function closeUi()
@@ -786,6 +1052,7 @@ function Window:Create(lib, config)
             sharedState.activeOpenedDropdown()
         end
         sharedState.isOpn = false
+        syncWindowBlur(false)
         local outTw = Animations:Tween(frm, Animations.Smooth, { Size = UDim2.new(0, 0, 0, 0) })
         if outTw then
             outTw.Completed:Connect(function()
@@ -881,6 +1148,8 @@ function Window:Create(lib, config)
         ScreenGui = mainUI,
         MainFrame = frm,
         ToggleOrb = tglBtn,
+        ToggleIcon = tglIcon,
+        StatusBar = statusBar,
         SearchBar = searchHolder,
         SearchInput = searchInp
     }
@@ -941,6 +1210,51 @@ function Window:Create(lib, config)
 
     function WinObj:Toggle()
         return toggleUi()
+    end
+
+    function WinObj:SetBlur(enabled, size)
+        if enabled ~= nil then
+            blurEnabled = (enabled == true)
+        end
+        if size ~= nil then
+            local parsed = tonumber(size)
+            if parsed then
+                blurSize = math.clamp(parsed, 0, 56)
+            end
+        end
+        syncWindowBlur(false)
+    end
+
+    function WinObj:GetBlur()
+        return blurEnabled, blurSize
+    end
+
+    function WinObj:_CompleteDeferredBlur(skipTween)
+        deferInitialBlur = false
+        syncWindowBlur(skipTween == true)
+    end
+
+    function WinObj:SetStatusBarVisible(vis)
+        if statusBar and type(statusBar.SetVisible) == "function" then
+            statusBar:SetVisible(vis == true)
+        end
+    end
+
+    function WinObj:IsStatusBarVisible()
+        if statusBar and type(statusBar.IsVisible) == "function" then
+            return statusBar:IsVisible()
+        end
+        return false
+    end
+
+    function WinObj:SetStatusBarExpanded(expand)
+        if statusBar and type(statusBar.SetExpanded) == "function" then
+            statusBar:SetExpanded(expand == true)
+        end
+    end
+
+    function WinObj:GetStatusBar()
+        return statusBar
     end
 
     function WinObj:CreateTab(tabName, pageTitle)
@@ -1301,10 +1615,21 @@ function Window:Create(lib, config)
         swapCat(1)
         loadTheme(sharedState.themeName)
         applyTrans(config.Transparency or 0)
+        syncWindowBlur(false)
     end
 
     function WinObj:Destroy()
         ctx.IsAlive = false
+        deferInitialBlur = false
+        destroyBlur()
+        if destroyStatusBarFn then
+            destroyStatusBarFn()
+        elseif statusBar and type(statusBar.Destroy) == "function" then
+            pcall(function() statusBar:Destroy() end)
+            statusBar = nil
+            ctx.StatusBar = nil
+        end
+        WinObj.StatusBar = nil
         local activeLoader = WinObj._ActiveLoader or ctx.ActiveLoader
         if activeLoader and type(activeLoader.Destroy) == "function" then
             pcall(function() activeLoader:Destroy() end)
@@ -1325,6 +1650,10 @@ function Window:Create(lib, config)
         if mainUI then
             pcall(function() mainUI:Destroy() end)
         end
+    end
+
+    if (not deferInitialBlur) and (sharedState.isOpn == true) and frm.Visible then
+        syncWindowBlur(false)
     end
 
     return WinObj

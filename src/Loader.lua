@@ -62,6 +62,42 @@ local SURFACE_PALETTES = {
         Well         = Color3.fromRGB(8, 9, 12),
         SubText      = Color3.fromRGB(190, 198, 212)
     },
+    Sakura = {
+        SurfaceStart = Color3.fromRGB(32, 11, 25),
+        SurfaceEnd   = Color3.fromRGB(54, 18, 42),
+        Well         = Color3.fromRGB(22, 7, 17),
+        SubText      = Color3.fromRGB(248, 210, 232)
+    },
+    Glacier = {
+        SurfaceStart = Color3.fromRGB(8, 26, 36),
+        SurfaceEnd   = Color3.fromRGB(14, 46, 62),
+        Well         = Color3.fromRGB(6, 18, 26),
+        SubText      = Color3.fromRGB(204, 242, 252)
+    },
+    Sunset = {
+        SurfaceStart = Color3.fromRGB(32, 12, 22),
+        SurfaceEnd   = Color3.fromRGB(56, 24, 20),
+        Well         = Color3.fromRGB(22, 8, 14),
+        SubText      = Color3.fromRGB(250, 214, 198)
+    },
+    Frost = {
+        SurfaceStart = Color3.fromRGB(16, 20, 26),
+        SurfaceEnd   = Color3.fromRGB(28, 34, 44),
+        Well         = Color3.fromRGB(11, 14, 18),
+        SubText      = Color3.fromRGB(214, 224, 240)
+    },
+    Vapor = {
+        SurfaceStart = Color3.fromRGB(24, 10, 40),
+        SurfaceEnd   = Color3.fromRGB(16, 40, 56),
+        Well         = Color3.fromRGB(16, 7, 28),
+        SubText      = Color3.fromRGB(226, 218, 252)
+    },
+    Mint = {
+        SurfaceStart = Color3.fromRGB(8, 30, 26),
+        SurfaceEnd   = Color3.fromRGB(14, 52, 44),
+        Well         = Color3.fromRGB(6, 20, 18),
+        SubText      = Color3.fromRGB(204, 248, 232)
+    },
     Rainbow = {
         SurfaceStart = Color3.fromRGB(16, 17, 26),
         SurfaceEnd   = Color3.fromRGB(26, 28, 42),
@@ -512,6 +548,7 @@ function Loader.new(lib, config)
         _duration = math.max(1.0, config.Duration or 3.2),
         _isDismissed = false,
         _isCancelled = false,
+        _hadPreservedMorphBlur = false,
         _activeTweens = {},
         _onCompleteCallbacks = {}
     }, Loader)
@@ -573,6 +610,7 @@ end
 function Loader:Destroy()
     self._isCancelled = true
     self._isDismissed = true
+    self._hadPreservedMorphBlur = false
     if self._activeTweens then
         for _, tw in ipairs(self._activeTweens) do
             pcall(function() tw:Cancel() end)
@@ -737,17 +775,24 @@ function Loader:_FadeOutContent(duration)
     end
 end
 
-function Loader:_TweenOutBackground(tweenInfo)
+function Loader:_TweenOutBackground(tweenInfo, targetBlurSize)
     if self._backdropScrim then
         self:_TrackTween(self._backdropScrim, tweenInfo, {
             BackgroundTransparency = 1
         })
     end
     if self._blurEffect then
-        self:_TrackTween(self._blurEffect, tweenInfo, {
-            Size = 0
-        })
+        local blurAlive = false
+        pcall(function()
+            blurAlive = (self._blurEffect.Parent ~= nil)
+        end)
+        if blurAlive then
+            return self:_TrackTween(self._blurEffect, tweenInfo, {
+                Size = (targetBlurSize ~= nil) and targetBlurSize or 0
+            })
+        end
     end
+    return nil
 end
 
 function Loader:Dismiss(callback)
@@ -833,14 +878,27 @@ function Loader:Dismiss(callback)
             task.wait(0.08)
             if self._isCancelled then return end
             if not self._screenGui or not self._screenGui.Parent then
+                self._hadPreservedMorphBlur = false
                 revealAndComplete()
                 return
             end
-            -- Step 2: Dimensional Morph in exact coordinate space + synchronized iOS blur clear
+            -- Step 2: Dimensional Morph in exact coordinate space + synchronized iOS blur clear/handoff
             local morphInfo = TweenInfo.new(0.36, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
 
             pcall(function() self._monolithGrad.Color = self._theme.Main end)
-            self:_TweenOutBackground(morphInfo)
+            local preserveBlur = (self._config.PreserveBlurOnReveal == true)
+            local targetBlur = math.clamp(tonumber(self._config.TargetBlurSize) or 0, 0, 56)
+            local useMorphBlur = preserveBlur and (targetBlur > 0)
+            local blurTw = self:_TweenOutBackground(morphInfo, useMorphBlur and targetBlur or 0)
+            if useMorphBlur and self._blurEffect and blurTw ~= nil then
+                local hasParent = false
+                pcall(function()
+                    hasParent = (self._blurEffect.Parent ~= nil)
+                end)
+                self._hadPreservedMorphBlur = hasParent
+            else
+                self._hadPreservedMorphBlur = false
+            end
 
             self:_TrackTween(self._monolithCorner, morphInfo, {
                 CornerRadius = UDim.new(0, 22)
@@ -907,6 +965,7 @@ function Loader:Dismiss(callback)
 
     if not okDismiss then
         warn("[SyntaxisLib] Loader:Dismiss error: " .. tostring(errDismiss))
+        self._hadPreservedMorphBlur = false
         pcall(function()
             if self._screenGui then self._screenGui:Destroy() end
         end)

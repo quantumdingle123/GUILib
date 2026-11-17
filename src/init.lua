@@ -129,6 +129,12 @@ SyntaxisLib.Components = loadModule("Components")
 SyntaxisLib.Panels = loadModule("Panels")
 SyntaxisLib.Window = loadModule("Window")
 SyntaxisLib.Loader = loadModule("Loader")
+local okStatusBar, statusBarMod = pcall(loadModule, "StatusBar")
+if okStatusBar and statusBarMod then
+    SyntaxisLib.StatusBar = statusBarMod
+elseif not okStatusBar then
+    warn("[SyntaxisLib] Optional module StatusBar unavailable: " .. tostring(statusBarMod))
+end
 
 function SyntaxisLib:CreateLoader(config)
     return self.Loader.new(self, config)
@@ -143,6 +149,7 @@ function SyntaxisLib:CreateWindow(config)
         local winConfig = {}
         for k, v in pairs(config) do winConfig[k] = v end
         winConfig.ShowLoader = false
+        winConfig._DeferInitialBlur = true
 
         local window = self.Window:Create(self, winConfig)
         if window and window.MainFrame then
@@ -153,7 +160,13 @@ function SyntaxisLib:CreateWindow(config)
         if toggleOrb then
             toggleOrb.Visible = false
         end
+        local wantsStatusBar = (config.StatusBar ~= false) and (config.StatusBarVisible ~= false)
+        if window and type(window.SetStatusBarVisible) == "function" then
+            window:SetStatusBarVisible(false)
+        end
 
+        local targetBlurSize = math.clamp(tonumber(config.BackgroundBlurSize) or 16, 0, 56)
+        local wantsWindowBlur = (config.BackgroundBlur ~= false and targetBlurSize > 0)
         local rawDuration = config.LoaderDuration or 3.2
         local loaderDuration = math.max(1.0, rawDuration)
         local revealed = false
@@ -161,6 +174,7 @@ function SyntaxisLib:CreateWindow(config)
             if revealed then return end
             revealed = true
             local active = window and (window._ActiveLoader or (window.Context and window.Context.ActiveLoader))
+            local preservedBlur = (not forceCleanupLoader) and (active ~= nil and active._hadPreservedMorphBlur == true)
             if window then
                 window._ActiveLoader = nil
                 if window.Context then
@@ -171,6 +185,9 @@ function SyntaxisLib:CreateWindow(config)
                 pcall(function() active:Destroy() end)
             end
             if not window or (window.Context and not window.Context.IsAlive) then
+                if window and type(window._CompleteDeferredBlur) == "function" then
+                    pcall(function() window:_CompleteDeferredBlur(false) end)
+                end
                 return
             end
             if window.MainFrame and window.MainFrame.Parent then
@@ -178,6 +195,12 @@ function SyntaxisLib:CreateWindow(config)
             end
             if toggleOrb and toggleOrb.Parent then
                 toggleOrb.Visible = true
+            end
+            if wantsStatusBar and type(window.SetStatusBarVisible) == "function" then
+                pcall(function() window:SetStatusBarVisible(true) end)
+            end
+            if type(window._CompleteDeferredBlur) == "function" then
+                pcall(function() window:_CompleteDeferredBlur(preservedBlur) end)
             end
         end
 
@@ -192,6 +215,9 @@ function SyntaxisLib:CreateWindow(config)
                 Steps = config.LoaderSteps,
                 BlurEnabled = (config.LoaderBlur ~= false),
                 BlurSize = config.LoaderBlurSize or 20,
+                BlurParent = config.BlurParent,
+                PreserveBlurOnReveal = wantsWindowBlur,
+                TargetBlurSize = targetBlurSize,
                 BackdropTransparency = config.LoaderBackdropTransparency or 0.74,
                 MorphToWindow = (config.MorphToWindow ~= false),
                 IgnoreGuiInset = (window and window.ScreenGui and window.ScreenGui.IgnoreGuiInset) or false,
@@ -222,8 +248,16 @@ function SyntaxisLib:CreateWindow(config)
 
         task.delay(loaderDuration + 3.0, function()
             if not revealed then
-                warn("[SyntaxisLib] Loader timed out; revealing window directly.")
-                revealWindow(true)
+                if window and window.Context and window.Context.IsAlive and window.ScreenGui and window.ScreenGui.Parent then
+                    warn("[SyntaxisLib] Loader timed out; revealing window directly.")
+                    revealWindow(true)
+                else
+                    revealed = true
+                    local active = window and (window._ActiveLoader or (window.Context and window.Context.ActiveLoader))
+                    if active and type(active.Destroy) == "function" then
+                        pcall(function() active:Destroy() end)
+                    end
+                end
             end
         end)
 

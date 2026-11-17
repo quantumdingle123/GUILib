@@ -3,7 +3,7 @@
 -- Repository: https://github.com/quantumdingle123/GUILib
 -- Purpose: Standalone test environment verifying Centered Monolith Loader,
 --          iOS Blur morph transition, Search Bar, Keybinds, tabular sliders,
---          8 themes (including Rainbow), floating dropdowns, and cleanup.
+--          14 themes (including Rainbow), draggable StatusBar, floating dropdowns, and cleanup.
 -- ==============================================================================
 
 local SyntaxisLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/quantumdingle123/GUILib/main/SyntaxisLib.lua"))()

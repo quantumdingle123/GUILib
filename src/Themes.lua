@@ -5,7 +5,15 @@
 
 local Themes = {}
 
-Themes.Order = { "Sapphire", "Emerald", "Ruby", "Amethyst", "Midnight", "Amber", "Obsidian", "Rainbow" }
+Themes.Order = {
+    "Sapphire", "Emerald",
+    "Ruby", "Amethyst",
+    "Midnight", "Amber",
+    "Obsidian", "Sakura",
+    "Glacier", "Sunset",
+    "Frost", "Vapor",
+    "Mint", "Rainbow"
+}
 
 Themes.Palettes = {
     Sapphire = { 
@@ -232,9 +240,211 @@ Themes.Palettes = {
         Stroke = Color3.fromRGB(98, 106, 124),
         GlassRim = Color3.fromRGB(228, 234, 244)
     },
+    Sakura = {
+        Name = "Sakura",
+        Order = 8,
+        Main = ColorSequence.new{
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(68, 22, 52)),
+            ColorSequenceKeypoint.new(0.5, Color3.fromRGB(96, 34, 74)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(126, 48, 96))
+        },
+        Topbar = ColorSequence.new{
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(80, 26, 62)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(122, 46, 92))
+        },
+        Button = ColorSequence.new{
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(138, 48, 102)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(178, 66, 132))
+        },
+        ButtonHover = ColorSequence.new{
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(176, 66, 130)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(214, 92, 162))
+        },
+        CardBg = Color3.fromRGB(76, 26, 58),
+        RowBg = Color3.fromRGB(56, 18, 44),
+        BoxBg = Color3.fromRGB(92, 32, 70),
+        DropBg = Color3.fromRGB(48, 16, 38),
+        SwitchOff = Color3.fromRGB(40, 12, 32),
+        Accent = Color3.fromRGB(255, 112, 188),
+        Accent2 = Color3.fromRGB(255, 196, 228),
+        Text = Color3.fromRGB(255, 255, 255),
+        SubText = Color3.fromRGB(248, 210, 232),
+        Stroke = Color3.fromRGB(224, 122, 178),
+        GlassRim = Color3.fromRGB(255, 224, 242)
+    },
+    Glacier = {
+        Name = "Glacier",
+        Order = 9,
+        Main = ColorSequence.new{
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(14, 58, 76)),
+            ColorSequenceKeypoint.new(0.5, Color3.fromRGB(22, 82, 108)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(32, 110, 142))
+        },
+        Topbar = ColorSequence.new{
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(18, 70, 92)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(30, 106, 138))
+        },
+        Button = ColorSequence.new{
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(32, 114, 146)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(48, 152, 188))
+        },
+        ButtonHover = ColorSequence.new{
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(48, 152, 188)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(72, 194, 230))
+        },
+        CardBg = Color3.fromRGB(18, 66, 86),
+        RowBg = Color3.fromRGB(14, 50, 68),
+        BoxBg = Color3.fromRGB(26, 84, 108),
+        DropBg = Color3.fromRGB(12, 44, 60),
+        SwitchOff = Color3.fromRGB(10, 36, 50),
+        Accent = Color3.fromRGB(48, 226, 255),
+        Accent2 = Color3.fromRGB(176, 246, 255),
+        Text = Color3.fromRGB(255, 255, 255),
+        SubText = Color3.fromRGB(204, 242, 252),
+        Stroke = Color3.fromRGB(94, 202, 228),
+        GlassRim = Color3.fromRGB(218, 250, 255)
+    },
+    Sunset = {
+        Name = "Sunset",
+        Order = 10,
+        Preview = ColorSequence.new{
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(122, 34, 64)),
+            ColorSequenceKeypoint.new(0.5, Color3.fromRGB(176, 68, 56)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(224, 114, 48))
+        },
+        Main = ColorSequence.new{
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(72, 24, 48)),
+            ColorSequenceKeypoint.new(0.5, Color3.fromRGB(106, 40, 48)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(144, 64, 42))
+        },
+        Topbar = ColorSequence.new{
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(86, 30, 56)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(136, 58, 42))
+        },
+        Button = ColorSequence.new{
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(156, 56, 58)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(202, 92, 52))
+        },
+        ButtonHover = ColorSequence.new{
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(196, 74, 74)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(236, 122, 72))
+        },
+        CardBg = Color3.fromRGB(80, 30, 46),
+        RowBg = Color3.fromRGB(58, 20, 34),
+        BoxBg = Color3.fromRGB(96, 38, 52),
+        DropBg = Color3.fromRGB(50, 18, 30),
+        SwitchOff = Color3.fromRGB(42, 14, 24),
+        Accent = Color3.fromRGB(255, 112, 74),
+        Accent2 = Color3.fromRGB(255, 202, 164),
+        Text = Color3.fromRGB(255, 255, 255),
+        SubText = Color3.fromRGB(250, 214, 198),
+        Stroke = Color3.fromRGB(224, 128, 104),
+        GlassRim = Color3.fromRGB(255, 228, 212)
+    },
+    Frost = {
+        Name = "Frost",
+        Order = 11,
+        Main = ColorSequence.new{
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(32, 38, 48)),
+            ColorSequenceKeypoint.new(0.5, Color3.fromRGB(46, 54, 68)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(62, 72, 90))
+        },
+        Topbar = ColorSequence.new{
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(38, 46, 58)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(58, 68, 86))
+        },
+        Button = ColorSequence.new{
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(70, 82, 102)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(96, 110, 134))
+        },
+        ButtonHover = ColorSequence.new{
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(96, 110, 134)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(126, 142, 170))
+        },
+        CardBg = Color3.fromRGB(38, 45, 58),
+        RowBg = Color3.fromRGB(28, 34, 44),
+        BoxBg = Color3.fromRGB(48, 56, 72),
+        DropBg = Color3.fromRGB(24, 29, 38),
+        SwitchOff = Color3.fromRGB(20, 24, 32),
+        Accent = Color3.fromRGB(132, 148, 172),
+        Accent2 = Color3.fromRGB(214, 226, 244),
+        Text = Color3.fromRGB(255, 255, 255),
+        SubText = Color3.fromRGB(214, 224, 240),
+        Stroke = Color3.fromRGB(148, 164, 190),
+        GlassRim = Color3.fromRGB(238, 245, 255)
+    },
+    Vapor = {
+        Name = "Vapor",
+        Order = 12,
+        Preview = ColorSequence.new{
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(172, 42, 146)),
+            ColorSequenceKeypoint.new(0.5, Color3.fromRGB(102, 58, 198)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(34, 170, 212))
+        },
+        Main = ColorSequence.new{
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(54, 20, 84)),
+            ColorSequenceKeypoint.new(0.5, Color3.fromRGB(44, 46, 102)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(24, 84, 114))
+        },
+        Topbar = ColorSequence.new{
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(68, 24, 98)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(28, 92, 126))
+        },
+        Button = ColorSequence.new{
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(146, 46, 156)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(42, 148, 192))
+        },
+        ButtonHover = ColorSequence.new{
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(182, 66, 194)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(64, 184, 230))
+        },
+        CardBg = Color3.fromRGB(46, 26, 82),
+        RowBg = Color3.fromRGB(34, 20, 64),
+        BoxBg = Color3.fromRGB(58, 34, 98),
+        DropBg = Color3.fromRGB(28, 16, 54),
+        SwitchOff = Color3.fromRGB(22, 12, 44),
+        Accent = Color3.fromRGB(242, 86, 208),
+        Accent2 = Color3.fromRGB(96, 242, 255),
+        Text = Color3.fromRGB(255, 255, 255),
+        SubText = Color3.fromRGB(226, 218, 252),
+        Stroke = Color3.fromRGB(176, 134, 244),
+        GlassRim = Color3.fromRGB(242, 236, 255)
+    },
+    Mint = {
+        Name = "Mint",
+        Order = 13,
+        Main = ColorSequence.new{
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(14, 62, 54)),
+            ColorSequenceKeypoint.new(0.5, Color3.fromRGB(20, 86, 74)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(28, 114, 96))
+        },
+        Topbar = ColorSequence.new{
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(18, 74, 64)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(28, 112, 94))
+        },
+        Button = ColorSequence.new{
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(28, 122, 102)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(44, 164, 134))
+        },
+        ButtonHover = ColorSequence.new{
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(44, 160, 132)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(68, 204, 168))
+        },
+        CardBg = Color3.fromRGB(18, 70, 60),
+        RowBg = Color3.fromRGB(14, 54, 46),
+        BoxBg = Color3.fromRGB(24, 88, 76),
+        DropBg = Color3.fromRGB(12, 46, 40),
+        SwitchOff = Color3.fromRGB(10, 38, 32),
+        Accent = Color3.fromRGB(46, 232, 174),
+        Accent2 = Color3.fromRGB(172, 255, 224),
+        Text = Color3.fromRGB(255, 255, 255),
+        SubText = Color3.fromRGB(204, 248, 232),
+        Stroke = Color3.fromRGB(88, 212, 176),
+        GlassRim = Color3.fromRGB(216, 255, 240)
+    },
     Rainbow = {
         Name = "Rainbow",
-        Order = 8,
+        Order = 14,
         IsRainbow = true,
         Preview = ColorSequence.new{
             ColorSequenceKeypoint.new(0.00, Color3.fromRGB(168, 42, 68)),
