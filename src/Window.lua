@@ -51,8 +51,9 @@ function Window:Create(lib, config)
             for _, child in ipairs(children) do
                 pcall(function()
                     if child:GetAttribute("SyntaxisInstance") == true
-                       or (rawGuiName and child.Name == rawGuiName)
-                       or child.Name == "SyntaxHubGUI" then
+                       or (rawGuiName and (child.Name == rawGuiName or child.Name == (tostring(rawGuiName) .. "_StatusBar")))
+                       or child.Name == "SyntaxHubGUI"
+                       or child.Name == "SyntaxHubStatusBar" then
                         child:Destroy()
                     end
                 end)

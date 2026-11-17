@@ -11,6 +11,13 @@ local RunService = game:GetService("RunService")
 local Stats = game:GetService("Stats")
 local UserInputService = game:GetService("UserInputService")
 
+local okGuiSvc, GuiService = pcall(function()
+    return game:GetService("GuiService")
+end)
+if not okGuiSvc then
+    GuiService = nil
+end
+
 local ICON_PING = "rbxassetid://85991442119968"
 local ICON_FPS = "rbxassetid://136228823216967"
 local ICON_PLAYERS = "rbxassetid://103676501054440"
@@ -25,12 +32,68 @@ local DRAWER_ROW_PAD = 2
 local DRAWER_MAX_HEIGHT = 252
 local DRAWER_GAP = 6
 local EDGE_MARGIN = 8
+local TOP_EDGE_MARGIN = 4
 local DRAG_THRESHOLD_PX = 5
 local FPS_REFRESH_INTERVAL = 0.50
 local DISTANCE_REFRESH_INTERVAL = 0.35
 local DEFAULT_STUDS_TO_METERS = 0.28
 
 local StatusBar = {}
+
+local function computeDefaultTopOffset(activeGui, scaledPillHeight)
+    if not activeGui then
+        return EDGE_MARGIN
+    end
+    local ignoresInset = false
+    pcall(function()
+        ignoresInset = (activeGui.IgnoreGuiInset == true)
+            or (activeGui.ScreenInsets ~= Enum.ScreenInsets.CoreUISafeInsets)
+    end)
+    if not ignoresInset then
+        return EDGE_MARGIN
+    end
+
+    local insetTopLeft = Vector2.new(0, 0)
+    local barMinY, barMaxY = nil, nil
+    if GuiService then
+        pcall(function()
+            local tl = GuiService:GetGuiInset()
+            if tl then
+                insetTopLeft = tl
+            end
+        end)
+        pcall(function()
+            local rect = GuiService.TopbarInset
+            if rect then
+                barMinY = rect.Min.Y
+                barMaxY = rect.Max.Y
+            end
+        end)
+    end
+
+    if barMinY == nil or barMaxY == nil or (barMaxY - barMinY) <= 0 then
+        barMinY = 0
+        barMaxY = insetTopLeft.Y
+    end
+
+    local barHeight = barMaxY - barMinY
+    if barHeight <= 0 then
+        return EDGE_MARGIN
+    end
+
+    -- Align vertically with Roblox topbar controls (modern ~44px Unibar buttons sit ~24px above TopbarInset.Max.Y)
+    local centerRawY = (barHeight >= 46) and (barMaxY - 24) or (barMinY + barHeight * 0.5)
+    local pillH = scaledPillHeight or PILL_HEIGHT
+    local rawTargetTop = centerRawY - (pillH * 0.5)
+
+    local guiAbsY = 0
+    pcall(function()
+        guiAbsY = activeGui.AbsolutePosition.Y
+    end)
+    local guiRawZeroTop = guiAbsY + insetTopLeft.Y
+    local yInGui = math.floor((rawTargetTop - guiRawZeroTop) + 0.5)
+    return math.max(TOP_EDGE_MARGIN, yInGui)
+end
 
 local function resolveAccent(theme)
     local accent = (theme and theme.Accent) or Color3.fromRGB(64, 168, 255)
@@ -172,11 +235,61 @@ function StatusBar:Create(ctx, config)
         Utils:ElevateIdentity(7)
     end
 
+    local ownsScreenGui = false
+    local okOverlay, overlayGui = pcall(function()
+        local sg = Instance.new("ScreenGui")
+        local rawGuiName = config.GuiName
+        local isCamouflage = (config.Camouflage ~= false)
+        if rawGuiName then
+            sg.Name = tostring(rawGuiName) .. "_StatusBar"
+        elseif isCamouflage then
+            sg.Name = "G_" .. string.format("%08x", math.random(0x10000000, 0x7FFFFFFF))
+        else
+            sg.Name = "SyntaxHubStatusBar"
+        end
+        sg.ResetOnSpawn = false
+        sg.DisplayOrder = 1000000000
+        sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+        sg.IgnoreGuiInset = true
+        pcall(function()
+            sg.ScreenInsets = Enum.ScreenInsets.DeviceSafeInsets
+        end)
+        pcall(function()
+            sg:SetAttribute("SyntaxisInstance", true)
+        end)
+        return sg
+    end)
+
+    if okOverlay and overlayGui then
+        local attached = false
+        if Utils and Utils.SafeParentScreenGui then
+            local okAttach = Utils:SafeParentScreenGui(overlayGui, config.Parent)
+            attached = (okAttach == true)
+        else
+            local safeContainer = Utils and Utils.GetSafeParent and Utils:GetSafeParent()
+            if safeContainer then
+                if Utils and Utils.ProtectGui then
+                    Utils:ProtectGui(overlayGui)
+                end
+                local okP = pcall(function() overlayGui.Parent = safeContainer end)
+                attached = okP and (overlayGui.Parent ~= nil or overlayGui:IsDescendantOf(game))
+            end
+        end
+        if attached then
+            screenGui = overlayGui
+            ownsScreenGui = true
+        else
+            warn("[SyntaxisLib] Dedicated StatusBar ScreenGui attach failed; falling back to Main ScreenGui.")
+            pcall(function() overlayGui:Destroy() end)
+        end
+    end
+
     local isAlive = true
     local localConns = {}
     local isExpanded = false
     local isDirty = true
     local hasDragged = false
+    local hasCustomPos = (config.StatusBarPosition ~= nil)
     local isVisible = (config.StatusBarVisible ~= false)
     local isFlippedUp = false
     local normRight = 1.0
@@ -228,7 +341,7 @@ function StatusBar:Create(ctx, config)
     local root = Instance.new("Frame")
     root.Name = "SyntaxisStatusBar"
     root.AnchorPoint = Vector2.new(1, 0)
-    root.Position = config.StatusBarPosition or UDim2.new(1, -14, 0, 8)
+    root.Position = config.StatusBarPosition or UDim2.new(1, -14, 0, computeDefaultTopOffset(screenGui, PILL_HEIGHT))
     root.Size = UDim2.new(0, pillWidth, 0, PILL_HEIGHT)
     root.BackgroundTransparency = 1
     root.BorderSizePixel = 0
@@ -559,12 +672,25 @@ function StatusBar:Create(ctx, config)
         return list
     end
 
+    local function applyClampedNormalizedPos(rawRight, rawTop, viewW, viewH, scaledW, scaledH)
+        local minRight = scaledW + EDGE_MARGIN
+        local maxRight = math.max(minRight, viewW - EDGE_MARGIN)
+        local minTop = TOP_EDGE_MARGIN
+        local maxTop = math.max(minTop, viewH - scaledH - EDGE_MARGIN)
+        local clampedRight = math.clamp(rawRight, minRight, maxRight)
+        local clampedTop = math.clamp(rawTop, minTop, maxTop)
+        normRight = clampedRight / viewW
+        normTop = clampedTop / viewH
+        root.AnchorPoint = Vector2.new(1, 0)
+        root.Position = UDim2.new(normRight, 0, normTop, 0)
+    end
+
     local function updateResponsiveScaleAndClamp()
-        if not screenGui or not screenGui.Parent or not root or not root.Parent then return end
+        if not isAlive or not screenGui or not screenGui.Parent or not root or not root.Parent then return end
         local viewSize = screenGui.AbsoluteSize
-        local viewW = viewSize.X
-        local viewH = viewSize.Y
-        if viewW <= 0 or viewH <= 0 then return end
+        local viewW = math.max(viewSize.X, 1)
+        local viewH = math.max(viewSize.Y, 1)
+        if viewSize.X <= 0 or viewSize.Y <= 0 then return end
 
         local nextScale = math.min(1, math.max(0.72, (viewW - (EDGE_MARGIN * 2)) / pillWidth))
         uiScale.Scale = nextScale
@@ -572,12 +698,10 @@ function StatusBar:Create(ctx, config)
         local scaledW = pillWidth * nextScale
         local scaledH = PILL_HEIGHT * nextScale
         if hasDragged then
-            local targetRight = math.clamp(normRight * viewW, scaledW + EDGE_MARGIN, math.max(scaledW + EDGE_MARGIN, viewW - EDGE_MARGIN))
-            local targetTop = math.clamp(normTop * viewH, EDGE_MARGIN, math.max(EDGE_MARGIN, viewH - scaledH - EDGE_MARGIN))
-            normRight = targetRight / viewW
-            normTop = targetTop / viewH
+            applyClampedNormalizedPos(normRight * viewW, normTop * viewH, viewW, viewH, scaledW, scaledH)
+        elseif not hasCustomPos then
             root.AnchorPoint = Vector2.new(1, 0)
-            root.Position = UDim2.new(normRight, 0, normTop, 0)
+            root.Position = UDim2.new(1, -14, 0, computeDefaultTopOffset(screenGui, scaledH))
         end
     end
 
@@ -596,7 +720,7 @@ function StatusBar:Create(ctx, config)
         local relTop = pill.AbsolutePosition.Y - guiOriginY
         local relBot = relTop + pill.AbsoluteSize.Y
         local spaceBelow = (viewH - EDGE_MARGIN - (relBot + DRAWER_GAP * scale)) / scale
-        local spaceAbove = ((relTop - DRAWER_GAP * scale) - EDGE_MARGIN) / scale
+        local spaceAbove = ((relTop - DRAWER_GAP * scale) - TOP_EDGE_MARGIN) / scale
 
         if spaceBelow >= desiredUnscaled or spaceBelow >= spaceAbove then
             isFlippedUp = false
@@ -872,7 +996,8 @@ function StatusBar:Create(ctx, config)
     local StatusBarObj = {
         Root = root,
         Pill = pill,
-        Drawer = drawer
+        Drawer = drawer,
+        ScreenGui = screenGui
     }
 
     local themeSubFn = nil
@@ -954,15 +1079,9 @@ function StatusBar:Create(ctx, config)
         local viewSize = (screenGui and screenGui.Parent) and screenGui.AbsoluteSize or Vector2.new(1280, 720)
         local viewW = math.max(viewSize.X, 1)
         local viewH = math.max(viewSize.Y, 1)
-        local scaledW = pill.AbsoluteSize.X
-        local scaledH = pill.AbsoluteSize.Y
-
-        local clampedRight = math.clamp(dragStartRight + delta.X, scaledW + EDGE_MARGIN, math.max(scaledW + EDGE_MARGIN, viewW - EDGE_MARGIN))
-        local clampedTop = math.clamp(dragStartTop + delta.Y, EDGE_MARGIN, math.max(EDGE_MARGIN, viewH - scaledH - EDGE_MARGIN))
-        normRight = clampedRight / viewW
-        normTop = clampedTop / viewH
-        root.AnchorPoint = Vector2.new(1, 0)
-        root.Position = UDim2.new(normRight, 0, normTop, 0)
+        local clampedW = pill.AbsoluteSize.X
+        local clampedH = pill.AbsoluteSize.Y
+        applyClampedNormalizedPos(dragStartRight + delta.X, dragStartTop + delta.Y, viewW, viewH, clampedW, clampedH)
     end))
 
     table.insert(localConns, UserInputService.InputEnded:Connect(function(input)
@@ -1081,18 +1200,57 @@ function StatusBar:Create(ctx, config)
         table.insert(localConns, leaveConn)
     end
 
-    -- Viewport resize re-clamping
+    -- Viewport resize, safe-inset origin, & TopbarInset listeners
+    local function handleViewportLayoutChanged()
+        updateResponsiveScaleAndClamp()
+        if isExpanded then
+            local targetH = computeDrawerTargetMetrics()
+            drawer.Size = UDim2.new(0, pillWidth, 0, targetH)
+        end
+    end
+
     local okResize, resizeConn = pcall(function()
-        return screenGui:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
-            updateResponsiveScaleAndClamp()
-            if isExpanded then
-                local targetH = computeDrawerTargetMetrics()
-                drawer.Size = UDim2.new(0, pillWidth, 0, targetH)
-            end
-        end)
+        return screenGui:GetPropertyChangedSignal("AbsoluteSize"):Connect(handleViewportLayoutChanged)
     end)
     if okResize and resizeConn then
         table.insert(localConns, resizeConn)
+    end
+
+    local okAbsPos, absPosConn = pcall(function()
+        return screenGui:GetPropertyChangedSignal("AbsolutePosition"):Connect(handleViewportLayoutChanged)
+    end)
+    if okAbsPos and absPosConn then
+        table.insert(localConns, absPosConn)
+    end
+
+    if GuiService then
+        local okTopSig, topSigConn = pcall(function()
+            return GuiService:GetPropertyChangedSignal("TopbarInset"):Connect(handleViewportLayoutChanged)
+        end)
+        if okTopSig and topSigConn then
+            table.insert(localConns, topSigConn)
+        end
+    end
+
+    if ownsScreenGui and screenGui then
+        local okDestroying, destroyingConn = pcall(function()
+            return screenGui.Destroying:Connect(function()
+                StatusBarObj:Destroy()
+            end)
+        end)
+        if okDestroying and destroyingConn then
+            table.insert(localConns, destroyingConn)
+        end
+        local okAncestry, ancestryConn = pcall(function()
+            return screenGui.AncestryChanged:Connect(function(_, newParent)
+                if newParent == nil then
+                    StatusBarObj:Destroy()
+                end
+            end)
+        end)
+        if okAncestry and ancestryConn then
+            table.insert(localConns, ancestryConn)
+        end
     end
 
     -- Parent into live ScreenGui cleanly at the end
@@ -1101,8 +1259,14 @@ function StatusBar:Create(ctx, config)
     end)
     updateResponsiveScaleAndClamp()
     updatePlayerCountDisplay(nil)
+    task.defer(function()
+        if isAlive then
+            handleViewportLayoutChanged()
+        end
+    end)
 
     function StatusBarObj:SetVisible(vis)
+        if not isAlive then return end
         isVisible = (vis == true)
         if root then
             root.Visible = isVisible
@@ -1117,6 +1281,7 @@ function StatusBar:Create(ctx, config)
     end
 
     function StatusBarObj:SetExpanded(expand)
+        if not isAlive then return end
         setExpanded(expand)
     end
 
@@ -1125,6 +1290,7 @@ function StatusBar:Create(ctx, config)
     end
 
     function StatusBarObj:RefreshPlayers()
+        if not isAlive then return end
         updatePlayerCountDisplay(nil)
         updateRowsAndDistances(nil)
         if isExpanded then
@@ -1155,6 +1321,11 @@ function StatusBar:Create(ctx, config)
         table.clear(rowPool)
         if root then
             pcall(function() root:Destroy() end)
+        end
+        if ownsScreenGui and screenGui then
+            local targetGui = screenGui
+            screenGui = nil
+            pcall(function() targetGui:Destroy() end)
         end
     end
 
