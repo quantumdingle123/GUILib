@@ -88,6 +88,7 @@ function Components:CreateCategory(ctx, title, parent, order, defaultOpen)
     local Animations = ctx.Animations
     local Utils = ctx.Utils
     local activeTheme = ctx.ActiveTheme
+    elevateIdentity(Utils)
 
     local frame = Instance.new("Frame", parent)
     frame.Size = UDim2.new(1, 0, 0, 44)
@@ -740,9 +741,12 @@ function Components:CreateSlider(ctx, title, desc, min, max, defaultVal, increme
     increment = (tonumber(increment) and tonumber(increment) > 0) and tonumber(increment) or 1
     local curVal = math.clamp(tonumber(defaultVal) or min, min, max)
 
+    local boldWeight = nil
+    pcall(function() boldWeight = Enum.FontWeight.Bold end)
+
     local numFmt = Utils:CreateNumericFormatter(min, max, increment, "", {
         TextSize = 12,
-        Weight = Enum.FontWeight.Bold,
+        Weight = boldWeight,
         Padding = 4
     })
     local TRACK_WIDTH = 80
@@ -794,7 +798,7 @@ function Components:CreateSlider(ctx, title, desc, min, max, defaultVal, increme
     valLbl.TextSize = 12
     valLbl.TextColor3 = activeTheme.Accent2
     valLbl.TextXAlignment = Enum.TextXAlignment.Right
-    Utils:ApplyTabularFont(valLbl, Enum.FontWeight.Bold)
+    Utils:ApplyTabularFont(valLbl, boldWeight)
     valLbl.Text = numFmt.Format(curVal)
 
     local trk = Instance.new("Frame", row)
@@ -1047,15 +1051,19 @@ function Components:CreateDropdown(ctx, title, desc, items, defaultVal, parent, 
         if not isExpanded then return end
         isExpanded = false
         if stepConn then stepConn:Disconnect(); stepConn = nil end
-        if activeDropTween then activeDropTween:Cancel() end
+        if activeDropTween then pcall(function() activeDropTween:Cancel() end) end
         arr.Text = "v"
         valLbl.Text = currentVal
         valLbl.TextColor3 = Color3.fromRGB(255, 255, 255)
         boxStr.Color = ctx.ActiveTheme.Stroke
         activeDropTween = Animations:Tween(dropArea, Animations.Fast, { Size = UDim2.new(0, dropWidth, 0, 0) })
-        activeDropTween.Completed:Connect(function()
-            if not isExpanded then dropArea.Visible = false end
-        end)
+        if activeDropTween then
+            activeDropTween.Completed:Connect(function()
+                if not isExpanded then dropArea.Visible = false end
+            end)
+        else
+            dropArea.Visible = false
+        end
         if ctx.State.activeOpenedDropdown == closeMenu then
             ctx.State.activeOpenedDropdown = nil
         end
@@ -1079,7 +1087,7 @@ function Components:CreateDropdown(ctx, title, desc, items, defaultVal, parent, 
             boxStr.Color = ctx.ActiveTheme.Accent2
             populateOptions()
 
-            if activeDropTween then activeDropTween:Cancel() end
+            if activeDropTween then pcall(function() activeDropTween:Cancel() end) end
             dropArea.Size = UDim2.new(0, dropWidth, 0, 0)
             dropArea.Visible = true
             activeDropTween = Animations:Tween(dropArea, Animations.Drop, { Size = UDim2.new(0, dropWidth, 0, targetH) })
@@ -1377,14 +1385,18 @@ function Components:CreateMultiDropdown(ctx, title, desc, items, defaultMap, par
         if not isExpanded then return end
         isExpanded = false
         if stepConn then stepConn:Disconnect(); stepConn = nil end
-        if activeDropTween then activeDropTween:Cancel() end
+        if activeDropTween then pcall(function() activeDropTween:Cancel() end) end
         arr.Text = "v"
         updateSummaryLabel()
         boxStr.Color = ctx.ActiveTheme.Stroke
         activeDropTween = Animations:Tween(dropArea, Animations.Fast, { Size = UDim2.new(0, dropWidth, 0, 0) })
-        activeDropTween.Completed:Connect(function()
-            if not isExpanded then dropArea.Visible = false end
-        end)
+        if activeDropTween then
+            activeDropTween.Completed:Connect(function()
+                if not isExpanded then dropArea.Visible = false end
+            end)
+        else
+            dropArea.Visible = false
+        end
         if ctx.State.activeOpenedDropdown == closeMenu then
             ctx.State.activeOpenedDropdown = nil
         end
@@ -1407,7 +1419,7 @@ function Components:CreateMultiDropdown(ctx, title, desc, items, defaultMap, par
             boxStr.Color = ctx.ActiveTheme.Accent2
             populateOptions()
 
-            if activeDropTween then activeDropTween:Cancel() end
+            if activeDropTween then pcall(function() activeDropTween:Cancel() end) end
             dropArea.Size = UDim2.new(0, dropWidth, 0, 0)
             dropArea.Visible = true
             activeDropTween = Animations:Tween(dropArea, Animations.Drop, { Size = UDim2.new(0, dropWidth, 0, targetH) })

@@ -112,6 +112,10 @@ function Loader.new(lib, config)
     local Themes = lib.Themes
     local Utils = lib.Utils
 
+    if Utils and Utils.ElevateIdentity then
+        Utils:ElevateIdentity(7)
+    end
+
     local themeName = config.Theme or "Sapphire"
     local activeTheme = Themes:Get(themeName)
     local tokens = getLoaderTokens(themeName, activeTheme)
@@ -123,21 +127,7 @@ function Loader.new(lib, config)
     local cardTrans = math.clamp(tonumber(config.CardTransparency) or 0.16, 0, 0.85)
     local blurParent = config.BlurParent or Lighting
 
-    local safeContainer = config.Parent or Utils:GetSafeParent()
     local guiName = config.GuiName or ("Syntaxis_Loader_" .. tostring(math.random(10000, 99999)))
-
-    local function protectGui(gui)
-        if Utils and Utils.ProtectGui then
-            Utils:ProtectGui(gui)
-            return
-        end
-        pcall(function() gui:SetAttribute("SyntaxisInstance", true) end)
-        if typeof(syn) == "table" and typeof(syn.protect_gui) == "function" then
-            pcall(syn.protect_gui, gui)
-        elseif typeof(protectgui) == "function" then
-            pcall(protectgui, gui)
-        end
-    end
 
     local scrimGui = Instance.new("ScreenGui")
     scrimGui.Name = guiName .. "_Scrim"
@@ -145,8 +135,7 @@ function Loader.new(lib, config)
     scrimGui.IgnoreGuiInset = true
     scrimGui.DisplayOrder = 999999998
     scrimGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    protectGui(scrimGui)
-    scrimGui.Parent = safeContainer
+    pcall(function() scrimGui:SetAttribute("SyntaxisInstance", true) end)
 
     local screenGui = Instance.new("ScreenGui")
     screenGui.Name = guiName
@@ -154,8 +143,7 @@ function Loader.new(lib, config)
     screenGui.IgnoreGuiInset = (config.IgnoreGuiInset == true)
     screenGui.DisplayOrder = 1000000000
     screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    protectGui(screenGui)
-    screenGui.Parent = safeContainer
+    pcall(function() screenGui:SetAttribute("SyntaxisInstance", true) end)
 
     -- =========================================================================
     -- 1. iOS DEPTH BACKDROP (Lighting.BlurEffect + Subtle Edge-to-Edge Scrim)
@@ -365,7 +353,9 @@ function Loader.new(lib, config)
             stepLabel.TextColor3 = tokens.SubText
             stepLabel.TextSize = 11
             stepLabel.TextXAlignment = Enum.TextXAlignment.Center
-            Utils:ApplyTabularFont(stepLabel, Enum.FontWeight.Bold)
+            local boldWeight = nil
+            pcall(function() boldWeight = Enum.FontWeight.Bold end)
+            Utils:ApplyTabularFont(stepLabel, boldWeight)
         end
     end
 
@@ -391,9 +381,12 @@ function Loader.new(lib, config)
     telemetryZone.Size = UDim2.new(1, 0, 0, 32)
     telemetryZone.BackgroundTransparency = 1
 
+    local boldWeight = nil
+    pcall(function() boldWeight = Enum.FontWeight.Bold end)
+
     local pctFmt = Utils:CreateNumericFormatter(0, 100, 1, "%", {
         TextSize = 12,
-        Weight = Enum.FontWeight.Bold,
+        Weight = boldWeight,
         Padding = 4
     })
 
@@ -418,7 +411,9 @@ function Loader.new(lib, config)
     percentLbl.TextColor3 = activeTheme.Accent
     percentLbl.TextSize = 12
     percentLbl.TextXAlignment = Enum.TextXAlignment.Right
-    Utils:ApplyTabularFont(percentLbl, Enum.FontWeight.Bold)
+    local pctBoldWeight = nil
+    pcall(function() pctBoldWeight = Enum.FontWeight.Bold end)
+    Utils:ApplyTabularFont(percentLbl, pctBoldWeight)
     percentLbl.Text = pctFmt.Format(0)
 
     -- 4px Recessed Progress Track (No oversized knob)
@@ -447,6 +442,46 @@ function Loader.new(lib, config)
     }
 
     local steps = config.Steps or DEFAULT_STEPS
+
+    local function attachGui(gui)
+        if Utils and Utils.SafeParentScreenGui then
+            return Utils:SafeParentScreenGui(gui, config.Parent)
+        end
+        local container = config.Parent or Utils:GetSafeParent()
+        if not container then
+            return false, "No UI container available"
+        end
+        if Utils and Utils.ProtectGui then
+            Utils:ProtectGui(gui)
+        end
+        local ok = pcall(function()
+            gui.Parent = container
+        end)
+        return ok, ok and container or "Failed to parent ScreenGui"
+    end
+
+    local okScrim = attachGui(scrimGui)
+    if not okScrim then
+        pcall(function() scrimGui:Destroy() end)
+        scrimGui = nil
+        backdropScrim = nil
+    end
+
+    local okScreen, screenErr = attachGui(screenGui)
+    if not okScreen then
+        if blurEffect then
+            pcall(function() blurEffect:Destroy() end)
+            blurEffect = nil
+        end
+        if scrimGui then
+            pcall(function() scrimGui:Destroy() end)
+            scrimGui = nil
+        end
+        pcall(function() screenGui:Destroy() end)
+        local msg = "[SyntaxisLib] Failed to attach Loader ScreenGui to any container: " .. tostring(screenErr)
+        warn(msg)
+        error(msg)
+    end
 
     local selfObj = setmetatable({
         _lib = lib,
@@ -477,13 +512,16 @@ function Loader.new(lib, config)
         _duration = math.max(1.0, config.Duration or 3.2),
         _isDismissed = false,
         _isCancelled = false,
+        _activeTweens = {},
         _onCompleteCallbacks = {}
     }, Loader)
 
     -- Guarantee BlurEffect & Scrim cleanup even if ScreenGui is destroyed externally
-    screenGui.Destroying:Connect(function()
-        selfObj:_CleanupBlur()
-        selfObj:_CleanupScrim()
+    pcall(function()
+        screenGui.Destroying:Connect(function()
+            selfObj:_CleanupBlur()
+            selfObj:_CleanupScrim()
+        end)
     end)
 
     if config.SkipEntrance ~= true then
@@ -514,9 +552,37 @@ function Loader:_CleanupScrim()
     self._backdropScrim = nil
 end
 
+function Loader:_TrackTween(obj, info, props)
+    if not obj or typeof(obj) ~= "Instance" or self._isCancelled then
+        return nil
+    end
+    local ok, tw = pcall(function()
+        local t = TweenService:Create(obj, info, props)
+        t:Play()
+        return t
+    end)
+    if ok and tw then
+        if self._activeTweens then
+            table.insert(self._activeTweens, tw)
+        end
+        return tw
+    end
+    return nil
+end
+
 function Loader:Destroy()
     self._isCancelled = true
     self._isDismissed = true
+    if self._activeTweens then
+        for _, tw in ipairs(self._activeTweens) do
+            pcall(function() tw:Cancel() end)
+        end
+        if table.clear then
+            pcall(table.clear, self._activeTweens)
+        else
+            self._activeTweens = {}
+        end
+    end
     self:_CleanupBlur()
     self:_CleanupScrim()
     if self._screenGui then
@@ -530,21 +596,21 @@ function Loader:_PlayEntrance()
 
     self._monolith.Size = UDim2.new(0, self._baseWidth - 14, 0, self._baseHeight - 8)
     self._monolith.BackgroundTransparency = math.min(1, self._cardTrans + 0.35)
-    TweenService:Create(self._monolith, enterInfo, {
+    self:_TrackTween(self._monolith, enterInfo, {
         Size = UDim2.new(0, self._baseWidth, 0, self._baseHeight),
         BackgroundTransparency = self._cardTrans
-    }):Play()
+    })
 
     if self._backdropScrim then
-        TweenService:Create(self._backdropScrim, enterInfo, {
+        self:_TrackTween(self._backdropScrim, enterInfo, {
             BackgroundTransparency = self._scrimTrans
-        }):Play()
+        })
     end
 
     if self._blurEffect and self._blurSize > 0 then
-        TweenService:Create(self._blurEffect, enterInfo, {
+        self:_TrackTween(self._blurEffect, enterInfo, {
             Size = self._blurSize
-        }):Play()
+        })
     end
 end
 
@@ -583,11 +649,11 @@ function Loader:SetProgress(ratio, statusText, stepLabelText)
         end
     end
 
-    TweenService:Create(
+    self:_TrackTween(
         self._fill,
         TweenInfo.new(0.16, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
         { Size = UDim2.new(ratio, 0, 1, 0) }
-    ):Play()
+    )
 end
 
 function Loader:Play(callback)
@@ -595,35 +661,46 @@ function Loader:Play(callback)
     local startTime = os.clock()
 
     task.spawn(function()
-        local currentRatio = 0
-        while currentRatio < 1 and not self._isDismissed and not self._isCancelled do
-            local elapsed = os.clock() - startTime
-            local linearRatio = math.clamp(elapsed / totalDuration, 0, 1)
+        local okPlay, errPlay = xpcall(function()
+            local currentRatio = 0
+            while currentRatio < 1 and not self._isDismissed and not self._isCancelled do
+                local elapsed = os.clock() - startTime
+                local linearRatio = math.clamp(elapsed / totalDuration, 0, 1)
 
-            -- Intentional non-linear progression curve across the 5 stages
-            local curvedRatio
-            if linearRatio < 0.24 then
-                curvedRatio = (linearRatio / 0.24) * 0.22
-            elseif linearRatio < 0.50 then
-                curvedRatio = 0.22 + ((linearRatio - 0.24) / 0.26) * 0.26
-            elseif linearRatio < 0.76 then
-                curvedRatio = 0.48 + ((linearRatio - 0.50) / 0.26) * 0.24
-            elseif linearRatio < 0.90 then
-                curvedRatio = 0.72 + ((linearRatio - 0.76) / 0.14) * 0.16
-            else
-                curvedRatio = 0.88 + ((linearRatio - 0.90) / 0.10) * 0.12
+                -- Intentional non-linear progression curve across the 5 stages
+                local curvedRatio
+                if linearRatio < 0.24 then
+                    curvedRatio = (linearRatio / 0.24) * 0.22
+                elseif linearRatio < 0.50 then
+                    curvedRatio = 0.22 + ((linearRatio - 0.24) / 0.26) * 0.26
+                elseif linearRatio < 0.76 then
+                    curvedRatio = 0.48 + ((linearRatio - 0.50) / 0.26) * 0.24
+                elseif linearRatio < 0.90 then
+                    curvedRatio = 0.72 + ((linearRatio - 0.76) / 0.14) * 0.16
+                else
+                    curvedRatio = 0.88 + ((linearRatio - 0.90) / 0.10) * 0.12
+                end
+
+                currentRatio = math.clamp(curvedRatio, 0, 1)
+                self:SetProgress(currentRatio)
+                task.wait(0.03)
             end
 
-            currentRatio = math.clamp(curvedRatio, 0, 1)
-            self:SetProgress(currentRatio)
-            task.wait(0.03)
-        end
-
-        if not self._isDismissed and not self._isCancelled then
-            self:SetProgress(1, "Ready", string.format("%02d / %02d", #self._steps, #self._steps))
-            task.wait(0.28)
             if not self._isDismissed and not self._isCancelled then
-                self:Dismiss(callback)
+                self:SetProgress(1, "Ready", string.format("%02d / %02d", #self._steps, #self._steps))
+                task.wait(0.28)
+                if not self._isDismissed and not self._isCancelled then
+                    self:Dismiss(callback)
+                end
+            end
+        end, tostring)
+
+        if not okPlay then
+            warn("[SyntaxisLib] Loader:Play error: " .. tostring(errPlay))
+            if not self._isCancelled and not self._isDismissed then
+                pcall(function()
+                    self:Dismiss(callback)
+                end)
             end
         end
     end)
@@ -643,31 +720,33 @@ end
 function Loader:_FadeOutContent(duration)
     local fadeInfo = TweenInfo.new(duration, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
     if self._topRim then
-        TweenService:Create(self._topRim, fadeInfo, { BackgroundTransparency = 1 }):Play()
+        self:_TrackTween(self._topRim, fadeInfo, { BackgroundTransparency = 1 })
     end
-    for _, inst in ipairs(self._content:GetDescendants()) do
-        if inst:IsA("TextLabel") then
-            TweenService:Create(inst, fadeInfo, { TextTransparency = 1 }):Play()
-        elseif inst:IsA("ImageLabel") then
-            TweenService:Create(inst, fadeInfo, { ImageTransparency = 1 }):Play()
-        elseif inst:IsA("Frame") then
-            TweenService:Create(inst, fadeInfo, { BackgroundTransparency = 1 }):Play()
-        elseif inst:IsA("UIStroke") then
-            TweenService:Create(inst, fadeInfo, { Transparency = 1 }):Play()
+    if self._content then
+        for _, inst in ipairs(self._content:GetDescendants()) do
+            if inst:IsA("TextLabel") then
+                self:_TrackTween(inst, fadeInfo, { TextTransparency = 1 })
+            elseif inst:IsA("ImageLabel") then
+                self:_TrackTween(inst, fadeInfo, { ImageTransparency = 1 })
+            elseif inst:IsA("Frame") then
+                self:_TrackTween(inst, fadeInfo, { BackgroundTransparency = 1 })
+            elseif inst:IsA("UIStroke") then
+                self:_TrackTween(inst, fadeInfo, { Transparency = 1 })
+            end
         end
     end
 end
 
 function Loader:_TweenOutBackground(tweenInfo)
     if self._backdropScrim then
-        TweenService:Create(self._backdropScrim, tweenInfo, {
+        self:_TrackTween(self._backdropScrim, tweenInfo, {
             BackgroundTransparency = 1
-        }):Play()
+        })
     end
     if self._blurEffect then
-        TweenService:Create(self._blurEffect, tweenInfo, {
+        self:_TrackTween(self._blurEffect, tweenInfo, {
             Size = 0
-        }):Play()
+        })
     end
 end
 
@@ -681,98 +760,159 @@ function Loader:Dismiss(callback)
     local morphTargetPos = (targetFrame and targetFrame.Position) or self._config.MorphPosition or UDim2.new(0.5, 0, 0.5, 0)
     local shouldMorph = (self._config.MorphToWindow ~= false)
 
-    -- Step 1: Fade out internal telemetry, top rim & header cleanly
-    self:_FadeOutContent(0.14)
-
-    if shouldMorph then
-        task.wait(0.08)
-        if self._isCancelled or not self._screenGui or not self._screenGui.Parent then return end
-        -- Step 2: Dimensional Morph in exact coordinate space + synchronized iOS blur clear
-        local morphInfo = TweenInfo.new(0.36, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
-
-        self._monolithGrad.Color = self._theme.Main
-        self:_TweenOutBackground(morphInfo)
-
-        TweenService:Create(self._monolithCorner, morphInfo, {
-            CornerRadius = UDim.new(0, 22)
-        }):Play()
-
-        TweenService:Create(self._monolithStroke, morphInfo, {
-            Color = self._theme.GlassRim or self._theme.Stroke,
-            Thickness = 1.3,
-            Transparency = 0.25
-        }):Play()
-
-        local morphTween = TweenService:Create(self._monolith, morphInfo, {
-            Size = morphTargetSize,
-            Position = morphTargetPos,
-            BackgroundTransparency = 0.14
-        })
-        morphTween:Play()
-
-        morphTween.Completed:Connect(function()
-            self:_CleanupBlur()
-            self:_CleanupScrim()
+    local function invokeCallbacks()
+        if self._isCancelled then return end
+        if typeof(callback) == "function" then pcall(callback) end
+        for _, cb in ipairs(self._onCompleteCallbacks) do
             if self._isCancelled then return end
+            pcall(cb)
+        end
+    end
 
-            if targetFrame and targetFrame.Parent then
-                targetFrame.Visible = true
-            end
-            if toggleOrb and toggleOrb.Parent then
-                local orbTargetSize = self._config.ToggleOrbSize or UDim2.new(0, 52, 0, 52)
-                toggleOrb.Size = UDim2.new(0, 0, 0, 0)
-                toggleOrb.Visible = true
-                TweenService:Create(
-                    toggleOrb,
-                    TweenInfo.new(0.24, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
-                    { Size = orbTargetSize }
-                ):Play()
-            end
+    local didRevealWindow = false
+    local function revealAndComplete()
+        if didRevealWindow then return end
+        didRevealWindow = true
+        self:_CleanupBlur()
+        self:_CleanupScrim()
+        if self._isCancelled then return end
 
-            if typeof(callback) == "function" then callback() end
-            for _, cb in ipairs(self._onCompleteCallbacks) do
-                pcall(cb)
-            end
+        if targetFrame and targetFrame.Parent then
+            targetFrame.Visible = true
+        end
+        if toggleOrb and toggleOrb.Parent then
+            local orbTargetSize = self._config.ToggleOrbSize or UDim2.new(0, 52, 0, 52)
+            toggleOrb.Size = UDim2.new(0, 0, 0, 0)
+            toggleOrb.Visible = true
+            self:_TrackTween(
+                toggleOrb,
+                TweenInfo.new(0.24, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+                { Size = orbTargetSize }
+            )
+        end
 
-            -- Yield one heartbeat so target window renders cleanly underneath before crossfade
-            task.wait()
-            if self._isCancelled or not self._screenGui or not self._screenGui.Parent then return end
-            local revealInfo = TweenInfo.new(0.16, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
-            TweenService:Create(self._monolithStroke, revealInfo, { Transparency = 1 }):Play()
-            local fadeShell = TweenService:Create(self._monolith, revealInfo, {
-                BackgroundTransparency = 1
-            })
-            fadeShell:Play()
+        invokeCallbacks()
+    end
+
+    local function cleanupShellAfterMorph()
+        task.wait()
+        if self._isCancelled or not self._screenGui or not self._screenGui.Parent then
+            pcall(function()
+                if self._screenGui then self._screenGui:Destroy() end
+            end)
+            return
+        end
+        local revealInfo = TweenInfo.new(0.16, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+        self:_TrackTween(self._monolithStroke, revealInfo, { Transparency = 1 })
+        local fadeShell = self:_TrackTween(self._monolith, revealInfo, {
+            BackgroundTransparency = 1
+        })
+        if fadeShell then
             fadeShell.Completed:Connect(function()
                 pcall(function()
                     if self._screenGui then self._screenGui:Destroy() end
                 end)
             end)
-        end)
-    else
-        -- Clean dissolve fallback when MorphToWindow = false
-        local exitInfo = TweenInfo.new(0.28, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
-        self:_TweenOutBackground(exitInfo)
-
-        local closeTween = TweenService:Create(self._monolith, exitInfo, {
-            Size = UDim2.new(0, self._baseWidth - 12, 0, self._baseHeight - 8),
-            BackgroundTransparency = 1
-        })
-        TweenService:Create(self._monolithStroke, exitInfo, { Transparency = 1 }):Play()
-        closeTween:Play()
-
-        closeTween.Completed:Connect(function()
-            self:_CleanupBlur()
-            self:_CleanupScrim()
+            task.delay(0.30, function()
+                pcall(function()
+                    if self._screenGui then self._screenGui:Destroy() end
+                end)
+            end)
+        else
             pcall(function()
                 if self._screenGui then self._screenGui:Destroy() end
             end)
+        end
+    end
+
+    local okDismiss, errDismiss = pcall(function()
+        -- Step 1: Fade out internal telemetry, top rim & header cleanly
+        self:_FadeOutContent(0.14)
+
+        if shouldMorph then
+            task.wait(0.08)
             if self._isCancelled then return end
-            if typeof(callback) == "function" then callback() end
-            for _, cb in ipairs(self._onCompleteCallbacks) do
-                pcall(cb)
+            if not self._screenGui or not self._screenGui.Parent then
+                revealAndComplete()
+                return
             end
+            -- Step 2: Dimensional Morph in exact coordinate space + synchronized iOS blur clear
+            local morphInfo = TweenInfo.new(0.36, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+
+            pcall(function() self._monolithGrad.Color = self._theme.Main end)
+            self:_TweenOutBackground(morphInfo)
+
+            self:_TrackTween(self._monolithCorner, morphInfo, {
+                CornerRadius = UDim.new(0, 22)
+            })
+
+            self:_TrackTween(self._monolithStroke, morphInfo, {
+                Color = self._theme.GlassRim or self._theme.Stroke,
+                Thickness = 1.3,
+                Transparency = 0.25
+            })
+
+            local morphTween = self:_TrackTween(self._monolith, morphInfo, {
+                Size = morphTargetSize,
+                Position = morphTargetPos,
+                BackgroundTransparency = 0.14
+            })
+
+            local function finishMorph()
+                local wasRevealed = didRevealWindow
+                revealAndComplete()
+                if not wasRevealed then
+                    cleanupShellAfterMorph()
+                end
+            end
+
+            if morphTween then
+                morphTween.Completed:Connect(finishMorph)
+                task.delay(0.55, finishMorph)
+            else
+                finishMorph()
+            end
+        else
+            -- Clean dissolve fallback when MorphToWindow = false
+            local exitInfo = TweenInfo.new(0.28, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+            self:_TweenOutBackground(exitInfo)
+
+            local closeTween = self:_TrackTween(self._monolith, exitInfo, {
+                Size = UDim2.new(0, self._baseWidth - 12, 0, self._baseHeight - 8),
+                BackgroundTransparency = 1
+            })
+            self:_TrackTween(self._monolithStroke, exitInfo, { Transparency = 1 })
+
+            local function finishDissolve()
+                local wasRevealed = didRevealWindow
+                pcall(function()
+                    if self._screenGui then self._screenGui:Destroy() end
+                end)
+                if not wasRevealed then
+                    didRevealWindow = true
+                    self:_CleanupBlur()
+                    self:_CleanupScrim()
+                    invokeCallbacks()
+                end
+            end
+
+            if closeTween then
+                closeTween.Completed:Connect(finishDissolve)
+                task.delay(0.42, finishDissolve)
+            else
+                finishDissolve()
+            end
+        end
+    end)
+
+    if not okDismiss then
+        warn("[SyntaxisLib] Loader:Dismiss error: " .. tostring(errDismiss))
+        pcall(function()
+            if self._screenGui then self._screenGui:Destroy() end
         end)
+        if not self._isCancelled then
+            revealAndComplete()
+        end
     end
 end
 

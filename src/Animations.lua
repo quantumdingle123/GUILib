@@ -14,12 +14,21 @@ Animations.Smooth = TweenInfo.new(0.26, Enum.EasingStyle.Quart, Enum.EasingDirec
 Animations.iOSSpring = TweenInfo.new(0.30, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 
 function Animations:Tween(obj, info, props)
-    local tw = TweenService:Create(obj, info or self.Smooth, props)
-    tw:Play()
-    return tw
+    if not obj or typeof(obj) ~= "Instance" then
+        return nil
+    end
+    local ok, tw = pcall(function()
+        local t = TweenService:Create(obj, info or self.Smooth, props)
+        t:Play()
+        return t
+    end)
+    return ok and tw or nil
 end
 
 function Animations:AttachTactile(btn, connList)
+    if not btn or typeof(btn) ~= "Instance" then
+        return
+    end
     local origSize = btn.Size
     local c1 = btn.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then

@@ -91,9 +91,13 @@ function Modals:ShowWarning(ctx, title, text)
 
     okBtn.MouseButton1Click:Connect(function()
         local tw = Animations:Tween(card, Animations.Fast, { Size = UDim2.fromOffset(0, 0) })
-        tw.Completed:Connect(function()
+        if tw then
+            tw.Completed:Connect(function()
+                if card and card.Parent then card:Destroy() end
+            end)
+        else
             if card and card.Parent then card:Destroy() end
-        end)
+        end
     end)
 
     safeParent(Utils, card, mainUI)
@@ -182,18 +186,26 @@ function Modals:ShowDiscord(ctx, inviteUrl)
         task.delay(0.5, function()
             if card and card.Parent then
                 local tw = Animations:Tween(card, Animations.Fast, { Size = UDim2.fromOffset(0, 0) })
-                tw.Completed:Connect(function()
+                if tw then
+                    tw.Completed:Connect(function()
+                        if card and card.Parent then card:Destroy() end
+                    end)
+                else
                     if card and card.Parent then card:Destroy() end
-                end)
+                end
             end
         end)
     end)
 
     noBtn.MouseButton1Click:Connect(function()
         local tw = Animations:Tween(card, Animations.Fast, { Size = UDim2.fromOffset(0, 0) })
-        tw.Completed:Connect(function()
+        if tw then
+            tw.Completed:Connect(function()
+                if card and card.Parent then card:Destroy() end
+            end)
+        else
             if card and card.Parent then card:Destroy() end
-        end)
+        end
     end)
 
     safeParent(Utils, card, mainUI)
@@ -268,9 +280,13 @@ function Modals:Notify(ctx, opts)
     task.delay(tonumber(opts.Duration) or 3, function()
         if toast and toast.Parent then
             local tw = Animations:Tween(toast, Animations.Fast, { Size = UDim2.new(1, 0, 0, 0) })
-            tw.Completed:Connect(function()
+            if tw then
+                tw.Completed:Connect(function()
+                    if toast and toast.Parent then toast:Destroy() end
+                end)
+            else
                 if toast and toast.Parent then toast:Destroy() end
-            end)
+            end
         end
     end)
 end

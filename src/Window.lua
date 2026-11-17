@@ -16,19 +16,33 @@ function Window:Create(lib, config)
     local Components = lib.Components
     local Panels = lib.Panels
 
-    local safeContainer = Utils:GetSafeParent()
+    if Utils and Utils.ElevateIdentity then
+        Utils:ElevateIdentity(7)
+    end
+
     local rawGuiName = config.GuiName
     local isCamouflage = (config.Camouflage ~= false)
 
-    pcall(function()
-        for _, child in ipairs(safeContainer:GetChildren()) do
-            if child:GetAttribute("SyntaxisInstance") == true
-               or (rawGuiName and child.Name == rawGuiName)
-               or child.Name == "SyntaxHubGUI" then
-                child:Destroy()
+    local cleanupContainers = {}
+    if Utils and Utils.GetCleanupContainers then
+        cleanupContainers = Utils:GetCleanupContainers(config.Parent)
+    else
+        pcall(function() table.insert(cleanupContainers, Utils:GetSafeParent()) end)
+    end
+    for _, container in ipairs(cleanupContainers) do
+        local okChildren, children = pcall(function() return container:GetChildren() end)
+        if okChildren and type(children) == "table" then
+            for _, child in ipairs(children) do
+                pcall(function()
+                    if child:GetAttribute("SyntaxisInstance") == true
+                       or (rawGuiName and child.Name == rawGuiName)
+                       or child.Name == "SyntaxHubGUI" then
+                        child:Destroy()
+                    end
+                end)
             end
         end
-    end)
+    end
 
     local mainUI = Instance.new("ScreenGui")
     if rawGuiName then
@@ -44,19 +58,7 @@ function Window:Create(lib, config)
     mainUI.DisplayOrder = 999999999
     -- Sibling ZIndexBehavior prevents translucent parent containers from rendering over child text/toggles
     mainUI.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-
-    if Utils and Utils.ProtectGui then
-        Utils:ProtectGui(mainUI)
-    else
-        mainUI:SetAttribute("SyntaxisInstance", true)
-        if typeof(syn) == "table" and typeof(syn.protect_gui) == "function" then
-            pcall(syn.protect_gui, mainUI)
-        elseif typeof(protectgui) == "function" then
-            pcall(protectgui, mainUI)
-        end
-    end
-
-    mainUI.Parent = safeContainer
+    pcall(function() mainUI:SetAttribute("SyntaxisInstance", true) end)
 
     local sharedState = config.State or {}
     sharedState.activeStealButtons = sharedState.activeStealButtons or {}
@@ -340,14 +342,36 @@ function Window:Create(lib, config)
     ctx.PopupLayer = popupLayer
     ctx.ToggleOrb = tglBtn
 
+    local okParent, parentResultOrErr = false, "Utils.SafeParentScreenGui unavailable"
+    if Utils and Utils.SafeParentScreenGui then
+        okParent, parentResultOrErr = Utils:SafeParentScreenGui(mainUI, config.Parent)
+    else
+        local safeContainer = Utils:GetSafeParent()
+        if safeContainer then
+            if Utils and Utils.ProtectGui then Utils:ProtectGui(mainUI) end
+            okParent = pcall(function() mainUI.Parent = safeContainer end)
+            parentResultOrErr = okParent and safeContainer or "Failed to parent ScreenGui"
+        end
+    end
+    if not okParent then
+        ctx.IsAlive = false
+        pcall(function() mainUI:Destroy() end)
+        local msg = "[SyntaxisLib] Failed to attach Main UI to any container: " .. tostring(parentResultOrErr)
+        warn(msg)
+        error(msg)
+    end
+
     Utils:MakeDraggable(topBar, frm, ctx.Connections)
     Utils:MakeDraggable(tglBtn, tglBtn, ctx.Connections)
+
+    local semiBoldWeight = nil
+    pcall(function() semiBoldWeight = Enum.FontWeight.SemiBold end)
 
     local sldrUI = {}
     local currentTransPct = 0
     local transFmt = Utils:CreateNumericFormatter(0, 100, 1, "%", {
         TextSize = 12,
-        Weight = Enum.FontWeight.SemiBold,
+        Weight = semiBoldWeight,
         Padding = 4
     })
     local prevGrad, prevStr, prevTxt
@@ -581,21 +605,24 @@ function Window:Create(lib, config)
         end
 
         local function doT(inst)
-            if inst:GetAttribute("NoTrans") then return end
+            local okNoTrans, noTrans = pcall(function() return inst:GetAttribute("NoTrans") end)
+            if okNoTrans and noTrans then return end
             if inst:IsA("GuiObject") then
-                if inst:GetAttribute("OrigBg") == nil then
-                    inst:SetAttribute("OrigBg", inst.BackgroundTransparency)
+                local okGetBg, origBg = pcall(function() return inst:GetAttribute("OrigBg") end)
+                if not okGetBg or origBg == nil then
+                    origBg = inst.BackgroundTransparency
+                    pcall(function() inst:SetAttribute("OrigBg", origBg) end)
                 end
-                local origBg = inst:GetAttribute("OrigBg")
                 if origBg < 1 then
                     inst.BackgroundTransparency = origBg + ((1 - origBg) * (a * 0.78))
                 end
             end
             if inst:IsA("UIStroke") then
-                if inst:GetAttribute("OrigStr") == nil then
-                    inst:SetAttribute("OrigStr", inst.Transparency)
+                local okGetStr, origStr = pcall(function() return inst:GetAttribute("OrigStr") end)
+                if not okGetStr or origStr == nil then
+                    origStr = inst.Transparency
+                    pcall(function() inst:SetAttribute("OrigStr", origStr) end)
                 end
-                local origStr = inst:GetAttribute("OrigStr")
                 inst.Transparency = origStr + ((1 - origStr) * (a * 0.35))
             end
         end
@@ -758,11 +785,15 @@ function Window:Create(lib, config)
         if sharedState.activeOpenedDropdown then
             sharedState.activeOpenedDropdown()
         end
-        local outTw = Animations:Tween(frm, Animations.Smooth, { Size = UDim2.new(0, 0, 0, 0) })
-        outTw.Completed:Connect(function()
-            if not sharedState.isOpn then frm.Visible = false end
-        end)
         sharedState.isOpn = false
+        local outTw = Animations:Tween(frm, Animations.Smooth, { Size = UDim2.new(0, 0, 0, 0) })
+        if outTw then
+            outTw.Completed:Connect(function()
+                if not sharedState.isOpn then frm.Visible = false end
+            end)
+        else
+            frm.Visible = false
+        end
     end
 
     local function toggleUi()
@@ -913,6 +944,7 @@ function Window:Create(lib, config)
     end
 
     function WinObj:CreateTab(tabName, pageTitle)
+        if Utils and Utils.ElevateIdentity then Utils:ElevateIdentity(7) end
         local idx = #ctx.Tabs + 1
         local pg = Instance.new("ScrollingFrame", pgsHold)
         pg.Name = tostring(tabName) .. "Page"
@@ -961,6 +993,7 @@ function Window:Create(lib, config)
     end
 
     function WinObj:CreatePriorityTab(tabName, pageTitle, opts)
+        if Utils and Utils.ElevateIdentity then Utils:ElevateIdentity(7) end
         local idx = #ctx.Tabs + 1
         local priorityPg = Instance.new("ScrollingFrame", pgsHold)
         priorityPg.Name = "PriorityPage"
@@ -1002,6 +1035,7 @@ function Window:Create(lib, config)
     end
 
     function WinObj:CreateStealPanelTab(tabName, pageTitle, opts)
+        if Utils and Utils.ElevateIdentity then Utils:ElevateIdentity(7) end
         local idx = #ctx.Tabs + 1
         local stealPanelPg = Instance.new("Frame", pgsHold)
         stealPanelPg.Name = "StealPanelPage"
@@ -1028,6 +1062,7 @@ function Window:Create(lib, config)
     end
 
     function WinObj:CreateSettingsTab(tabName, pageTitle, opts)
+        if Utils and Utils.ElevateIdentity then Utils:ElevateIdentity(7) end
         opts = opts or {}
         local idx = #ctx.Tabs + 1
         local setPg = Instance.new("Frame", pgsHold)
@@ -1087,7 +1122,7 @@ function Window:Create(lib, config)
         sldrUI.ValTxt.TextSize = 12
         sldrUI.ValTxt.TextColor3 = Color3.fromRGB(255, 255, 255)
         sldrUI.ValTxt.TextXAlignment = Enum.TextXAlignment.Right
-        Utils:ApplyTabularFont(sldrUI.ValTxt, Enum.FontWeight.SemiBold)
+        Utils:ApplyTabularFont(sldrUI.ValTxt, semiBoldWeight)
         sldrUI.ValTxt.Text = transFmt.Format(currentTransPct)
 
         sldrUI.Trk = Instance.new("Frame", sldrUI.Bg)

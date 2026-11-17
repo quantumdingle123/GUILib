@@ -11,10 +11,31 @@ local UserInputService = game:GetService("UserInputService")
 local Utils = {}
 
 function Utils:ElevateIdentity(level)
-    local setId = setthreadidentity or set_thread_identity
-    if type(setId) == "function" then
-        pcall(setId, level or 7)
+    local target = tonumber(level) or 7
+    local getId = (type(getthreadidentity) == "function" and getthreadidentity)
+        or (type(get_thread_identity) == "function" and get_thread_identity)
+        or (syn ~= nil and type(syn) == "table" and type(syn.get_thread_identity) == "function" and syn.get_thread_identity)
+    if getId then
+        local ok, cur = pcall(getId)
+        if ok and type(cur) == "number" and cur >= target then
+            return true
+        end
     end
+
+    local function trySet(fn)
+        if type(fn) == "function" then
+            return pcall(fn, target)
+        end
+        return false
+    end
+
+    if trySet(setthreadidentity) then return true end
+    if trySet(set_thread_identity) then return true end
+    if trySet(setidentity) then return true end
+    if syn ~= nil and type(syn) == "table" and trySet(syn.set_thread_identity) then
+        return true
+    end
+    return false
 end
 
 function Utils:SafeParent(inst, parent)
@@ -26,39 +47,186 @@ function Utils:SafeParent(inst, parent)
 end
 
 function Utils:ProtectGui(gui)
-    if not gui then return end
+    if not gui or typeof(gui) ~= "Instance" then return end
     pcall(function()
         gui:SetAttribute("SyntaxisInstance", true)
     end)
-    if typeof(syn) == "table" and typeof(syn.protect_gui) == "function" then
+    if syn ~= nil and type(syn) == "table" and type(syn.protect_gui) == "function" then
         pcall(syn.protect_gui, gui)
-    elseif typeof(protectgui) == "function" then
+    elseif type(protectgui) == "function" then
         pcall(protectgui, gui)
+    elseif type(protect_gui) == "function" then
+        pcall(protect_gui, gui)
     end
 end
 
-function Utils:GetSafeParent()
-    if RunService:IsStudio() then
-        local lp = Players.LocalPlayer or Players.PlayerAdded:Wait()
-        return lp:WaitForChild("PlayerGui")
+function Utils:GetHiddenGui()
+    local function tryFn(fn)
+        if type(fn) == "function" then
+            local ok, res = pcall(fn)
+            if ok and typeof(res) == "Instance" then
+                return res
+            end
+        end
+        return nil
     end
 
-    local safeContainer = nil
-    if typeof(gethui) == "function" then
-        local ok, res = pcall(gethui)
-        if ok and typeof(res) == "Instance" then safeContainer = res end
-    end
-    if not safeContainer then
+    return tryFn(gethui)
+        or tryFn(get_hidden_gui)
+        or tryFn(get_hidden_ui)
+        or tryFn(hiddenUI)
+end
+
+local function resolvePlayerGui(waitTimeout)
+    local lp = Players.LocalPlayer
+    if not lp and waitTimeout and waitTimeout > 0 then
         pcall(function()
-            local cg = game:GetService("CoreGui")
-            if cg and typeof(cg) == "Instance" then safeContainer = cg end
+            lp = Players.PlayerAdded:Wait()
         end)
     end
-    if not safeContainer then
-        local lp = Players.LocalPlayer or Players.PlayerAdded:Wait()
-        safeContainer = lp:WaitForChild("PlayerGui")
+    if not lp then return nil end
+    local okExisting, existing = pcall(function()
+        return lp:FindFirstChildOfClass("PlayerGui")
+    end)
+    if okExisting and existing then
+        return existing
     end
-    return safeContainer
+    if waitTimeout and waitTimeout > 0 then
+        local okWait, waited = pcall(function()
+            return lp:WaitForChild("PlayerGui", waitTimeout)
+        end)
+        if okWait and typeof(waited) == "Instance" then
+            return waited
+        end
+    end
+    return nil
+end
+
+function Utils:GetCleanupContainers(preferredParent)
+    local list = {}
+    local seen = {}
+    local function add(inst)
+        if inst and typeof(inst) == "Instance" and not seen[inst] then
+            seen[inst] = true
+            table.insert(list, inst)
+        end
+    end
+
+    if typeof(preferredParent) == "Instance" then
+        add(preferredParent)
+    end
+    add(self:GetHiddenGui())
+    pcall(function()
+        local cg = game:GetService("CoreGui")
+        add(cg)
+    end)
+    add(resolvePlayerGui(0))
+    return list
+end
+
+function Utils:SafeParentScreenGui(gui, preferredParent)
+    if not gui or typeof(gui) ~= "Instance" then
+        return false, "Invalid ScreenGui instance"
+    end
+    self:ElevateIdentity(7)
+
+    local function isAttached(container)
+        local okParent, isMatch = pcall(function()
+            return gui.Parent == container
+        end)
+        local okDesc, isDesc = pcall(function()
+            return gui:IsDescendantOf(game)
+        end)
+        return (okParent and isMatch) or (okDesc and isDesc)
+    end
+
+    local function tryContainer(container, shouldProtect)
+        if not container or typeof(container) ~= "Instance" then
+            return false
+        end
+        if shouldProtect then
+            self:ProtectGui(gui)
+        else
+            pcall(function()
+                gui:SetAttribute("SyntaxisInstance", true)
+            end)
+        end
+        local ok = pcall(function()
+            gui.Parent = container
+        end)
+        if not ok then
+            return false
+        end
+        return isAttached(container)
+    end
+
+    local okCg, cg = pcall(function()
+        return game:GetService("CoreGui")
+    end)
+
+    if typeof(preferredParent) == "Instance" then
+        local protectPreferred = (okCg and typeof(cg) == "Instance" and preferredParent == cg)
+        if tryContainer(preferredParent, protectPreferred) then
+            return true, preferredParent
+        end
+    end
+
+    if RunService:IsStudio() then
+        local pg = resolvePlayerGui(10)
+        if pg and tryContainer(pg, false) then
+            return true, pg
+        end
+        return false, "Studio PlayerGui unavailable"
+    end
+
+    local hui = self:GetHiddenGui()
+    if hui and tryContainer(hui, false) then
+        return true, hui
+    end
+
+    if okCg and typeof(cg) == "Instance" and tryContainer(cg, true) then
+        return true, cg
+    end
+
+    local pg = resolvePlayerGui(10)
+    if pg and tryContainer(pg, false) then
+        return true, pg
+    end
+
+    return false, "No writable UI container available"
+end
+
+function Utils:GetSafeParent()
+    self:ElevateIdentity(7)
+
+    if RunService:IsStudio() then
+        local pg = resolvePlayerGui(10)
+        if pg then return pg end
+    end
+
+    local hui = self:GetHiddenGui()
+    if hui then
+        return hui
+    end
+
+    local okCg, cg = pcall(function()
+        return game:GetService("CoreGui")
+    end)
+    if okCg and typeof(cg) == "Instance" then
+        local canWrite = false
+        pcall(function()
+            local probe = Instance.new("Folder")
+            probe.Name = "_SyntaxisProbe"
+            probe.Parent = cg
+            canWrite = (probe.Parent == cg) or probe:IsDescendantOf(game)
+            probe:Destroy()
+        end)
+        if canWrite then
+            return cg
+        end
+    end
+
+    return resolvePlayerGui(10)
 end
 
 function Utils:RoundCorner(parent, radius)
@@ -246,8 +414,13 @@ local TABULAR_FONT_ASSET = "rbxasset://fonts/families/RobotoMono.json"
 
 function Utils:ApplyTabularFont(label, weight, fallbackFont)
     if not label then return nil end
-    local enumFont = fallbackFont or Enum.Font.RobotoMono
-    label.Font = enumFont
+    local enumFont = fallbackFont
+    if not enumFont then
+        pcall(function() enumFont = Enum.Font.RobotoMono end)
+    end
+    if enumFont then
+        pcall(function() label.Font = enumFont end)
+    end
     local ok, fontFace = pcall(function()
         return Font.new(TABULAR_FONT_ASSET, weight or Enum.FontWeight.Bold)
     end)
@@ -259,31 +432,20 @@ function Utils:ApplyTabularFont(label, weight, fallbackFont)
 end
 
 function Utils:MeasureTextWidth(text, textSize, fontFace, fallbackEnumFont)
-    if fontFace then
-        local ok, bounds = pcall(function()
-            local params = Instance.new("GetTextBoundsParams")
-            params.Text = tostring(text or "")
-            params.Font = fontFace
-            params.Size = textSize
-            params.Width = 2000
-            return TextService:GetTextBoundsAsync(params)
-        end)
-        if ok and bounds then
-            return bounds.X
-        end
-    end
-    local okFallback, sz = pcall(function()
+    local str = tostring(text or "")
+    local clampedSize = math.clamp(math.floor(tonumber(textSize) or 12), 1, 100)
+    local ok, sz = pcall(function()
         return TextService:GetTextSize(
-            tostring(text or ""),
-            textSize,
+            str,
+            clampedSize,
             fallbackEnumFont or Enum.Font.RobotoMono,
             Vector2.new(2000, 200)
         )
     end)
-    if okFallback and sz then
+    if ok and sz then
         return sz.X
     end
-    return #tostring(text or "") * math.ceil(textSize * 0.6)
+    return #str * math.ceil(clampedSize * 0.6)
 end
 
 function Utils:RoundToDecimals(v, decimals)
@@ -341,15 +503,20 @@ function Utils:CreateNumericFormatter(minVal, maxVal, increment, suffix, opts)
         .. suffix
 
     local textSize = opts.TextSize or 12
-    local weight = opts.Weight or Enum.FontWeight.Bold
+    local weight = opts.Weight
+    if not weight then
+        pcall(function() weight = Enum.FontWeight.Bold end)
+    end
     local padding = opts.Padding or 4
 
     local okFace, fontFace = pcall(function()
-        return Font.new(TABULAR_FONT_ASSET, weight)
+        return Font.new(TABULAR_FONT_ASSET, weight or Enum.FontWeight.Bold)
     end)
     if not okFace then fontFace = nil end
 
-    local measuredW = self:MeasureTextWidth(sampleText, textSize, fontFace, Enum.Font.RobotoMono)
+    local fallbackEnum = nil
+    pcall(function() fallbackEnum = Enum.Font.RobotoMono end)
+    local measuredW = self:MeasureTextWidth(sampleText, textSize, fontFace, fallbackEnum)
     local reservedW = math.max(16, math.ceil(measuredW) + padding)
 
     return {
