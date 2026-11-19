@@ -196,6 +196,7 @@ function Window:Create(lib, config)
     topTxt.Active = false
 
     local searchHolder, searchStroke, searchInp, clearBtn, clearBarA, clearBarB
+    local searchFocused = false
     if enableSearch then
         searchHolder = Instance.new("Frame", topBar)
         searchHolder.Name = "SearchBar"
@@ -334,15 +335,34 @@ function Window:Create(lib, config)
     sideStr.Thickness = 1
     sideStr.Transparency = 0.35
 
-    local sidePad = Instance.new("UIPadding", side)
+    local sideBtns = Instance.new("Frame", side)
+    sideBtns.Name = "TabList"
+    sideBtns.Size = UDim2.fromScale(1, 1)
+    sideBtns.BackgroundTransparency = 1
+    sideBtns.BorderSizePixel = 0
+    sideBtns.ZIndex = 3
+
+    local sidePad = Instance.new("UIPadding", sideBtns)
     sidePad.PaddingTop = UDim.new(0, 10)
     sidePad.PaddingBottom = UDim.new(0, 10)
     sidePad.PaddingLeft = UDim.new(0, 8)
     sidePad.PaddingRight = UDim.new(0, 8)
 
-    local sideLay = Instance.new("UIListLayout", side)
+    local sideLay = Instance.new("UIListLayout", sideBtns)
     sideLay.Padding = UDim.new(0, 6)
     sideLay.SortOrder = Enum.SortOrder.LayoutOrder
+
+    local sideSlider = Instance.new("Frame", side)
+    sideSlider.Name = "ActiveTabSlider"
+    sideSlider.AnchorPoint = Vector2.new(0, 0.5)
+    sideSlider.Position = UDim2.new(0, 12, 0, 29)
+    sideSlider.Size = UDim2.new(0, 3.5, 0, 18)
+    sideSlider.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    sideSlider.BorderSizePixel = 0
+    sideSlider.ZIndex = 6
+    sideSlider.Visible = false
+    sideSlider:SetAttribute("NoTrans", true)
+    Utils:RoundCorner(sideSlider, 999)
 
     local cntFrame = Instance.new("Frame", frm)
     cntFrame.Name = "ContentFrame"
@@ -381,6 +401,68 @@ function Window:Create(lib, config)
     pgsHold.BackgroundTransparency = 1
     pgsHold.Position = UDim2.new(0, 8, 0, 44)
     pgsHold.Size = UDim2.new(1, -16, 1, -50)
+
+    local searchEmptyState = Instance.new("Frame", cntFrame)
+    searchEmptyState.Name = "SearchEmptyState"
+    searchEmptyState.BackgroundTransparency = 1
+    searchEmptyState.Position = UDim2.new(0, 8, 0, 44)
+    searchEmptyState.Size = UDim2.new(1, -16, 1, -50)
+    searchEmptyState.Visible = false
+    searchEmptyState.ZIndex = 12
+
+    local emptyCard = Instance.new("Frame", searchEmptyState)
+    emptyCard.Name = "Card"
+    emptyCard.AnchorPoint = Vector2.new(0.5, 0.5)
+    emptyCard.Position = UDim2.fromScale(0.5, 0.48)
+    emptyCard.Size = UDim2.new(0, 260, 0, 118)
+    emptyCard.BackgroundColor3 = activeTheme.CardBg
+    emptyCard.BackgroundTransparency = 0.20
+    emptyCard.BorderSizePixel = 0
+    emptyCard.ZIndex = 13
+    Utils:RoundCorner(emptyCard, 14)
+
+    local emptyStroke = Instance.new("UIStroke", emptyCard)
+    emptyStroke.Thickness = 1
+    emptyStroke.Transparency = 0.35
+    emptyStroke.Color = activeTheme.Stroke
+
+    local emptyTitle = Instance.new("TextLabel", emptyCard)
+    emptyTitle.Size = UDim2.new(1, -24, 0, 20)
+    emptyTitle.Position = UDim2.new(0, 12, 0, 18)
+    emptyTitle.BackgroundTransparency = 1
+    emptyTitle.Font = Enum.Font.GothamBold
+    emptyTitle.TextSize = 13.5
+    emptyTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+    emptyTitle.Text = "No matching controls"
+    emptyTitle.ZIndex = 14
+
+    local emptySub = Instance.new("TextLabel", emptyCard)
+    emptySub.Size = UDim2.new(1, -24, 0, 18)
+    emptySub.Position = UDim2.new(0, 12, 0, 40)
+    emptySub.BackgroundTransparency = 1
+    emptySub.Font = Enum.Font.GothamMedium
+    emptySub.TextSize = 11
+    emptySub.TextColor3 = activeTheme.SubText
+    emptySub.TextTruncate = Enum.TextTruncate.AtEnd
+    emptySub.Text = "Try a different keyword or clear search"
+    emptySub.ZIndex = 14
+
+    local emptyClearBtn = Instance.new("TextButton", emptyCard)
+    emptyClearBtn.Name = "ClearSearchButton"
+    emptyClearBtn.AnchorPoint = Vector2.new(0.5, 0)
+    emptyClearBtn.Position = UDim2.new(0.5, 0, 0, 72)
+    emptyClearBtn.Size = UDim2.new(0, 108, 0, 28)
+    emptyClearBtn.BackgroundColor3 = activeTheme.Accent
+    emptyClearBtn.BackgroundTransparency = 0.10
+    emptyClearBtn.BorderSizePixel = 0
+    emptyClearBtn.AutoButtonColor = false
+    emptyClearBtn.Font = Enum.Font.GothamBold
+    emptyClearBtn.TextSize = 11.5
+    emptyClearBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    emptyClearBtn.Text = "Clear Search"
+    emptyClearBtn.ZIndex = 14
+    Utils:RoundCorner(emptyClearBtn, 999)
+    Animations:AttachTactile(emptyClearBtn, ctx.Connections)
 
     local popupLayer = Instance.new("Frame", frm)
     popupLayer.Name = "PopupOverlayLayer"
@@ -490,9 +572,8 @@ function Window:Create(lib, config)
             data.Stroke.Transparency = 0.15
             data.Button.BackgroundTransparency = 0.08
             data.Label.TextColor3 = Color3.fromRGB(255, 255, 255)
-            data.Indicator.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+            data.Indicator.BackgroundTransparency = 1
             if not skipTweens then
-                Animations:Tween(data.Indicator, Animations.Fast, { Size = UDim2.new(0, 3.5, 0, 18) })
                 Animations:Tween(data.Label, Animations.Fast, { Position = UDim2.new(0, 16, 0, 10) })
             end
         else
@@ -501,8 +582,8 @@ function Window:Create(lib, config)
             data.Stroke.Transparency = 0.40
             data.Button.BackgroundTransparency = 0.28
             data.Label.TextColor3 = th.Text
+            data.Indicator.BackgroundTransparency = 1
             if not skipTweens then
-                Animations:Tween(data.Indicator, Animations.Fast, { Size = UDim2.new(0, 0, 0, 18) })
                 Animations:Tween(data.Label, Animations.Fast, { Position = UDim2.new(0, 14, 0, 10) })
             end
         end
@@ -588,6 +669,7 @@ function Window:Create(lib, config)
         if sharedState.activeOpenedDropdown then
             sharedState.activeOpenedDropdown()
         end
+        local changedTab = (sharedState.curCat ~= idx)
         sharedState.curCat = idx
         for i, d in ipairs(ctx.Tabs) do
             if d.Page then
@@ -596,6 +678,19 @@ function Window:Create(lib, config)
             setCatVis(i, ctx.TabButtons[i] and ctx.TabButtons[i].IsHovered == true, false)
         end
         if ctx.Tabs[idx] then
+            sideSlider.Visible = true
+            local targetSliderY = 10 + (idx - 1) * 44 + 19
+            Animations:Tween(sideSlider, TweenInfo.new(0.26, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+                Position = UDim2.new(0, 12, 0, targetSliderY)
+            })
+            if changedTab and frm.Visible then
+                pgsHold.Position = UDim2.new(0, 8, 0, 50)
+                Animations:Tween(pgsHold, TweenInfo.new(0.18, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                    Position = UDim2.new(0, 8, 0, 44)
+                })
+            else
+                pgsHold.Position = UDim2.new(0, 8, 0, 44)
+            end
             pageLbl.Text = ctx.Tabs[idx].Title
             pendingUnderlineUpdate = true
             task.spawn(function()
@@ -622,6 +717,7 @@ function Window:Create(lib, config)
         local matchingCategories = {}
 
         if not isSearching then
+            searchEmptyState.Visible = false
             for _, item in ipairs(ctx.SearchIndex) do
                 if item.Instance and item.Instance:IsA("GuiObject") then
                     item.Instance.Visible = true
@@ -652,6 +748,7 @@ function Window:Create(lib, config)
 
         local currentHasMatch = false
         local firstMatchTabIdx = nil
+        local matchTotal = 0
 
         for _, cat in ipairs(ctx.Categories) do
             local catTitleMatch = string.find((cat.Title or ""):lower(), query, 1, true) ~= nil
@@ -678,6 +775,7 @@ function Window:Create(lib, config)
             end
 
             if matchingCategories[cat] and cat.Frame then
+                matchTotal = matchTotal + 1
                 for tIdx, tabData in ipairs(ctx.Tabs) do
                     if tabData.Page and cat.Frame:IsDescendantOf(tabData.Page) then
                         if tIdx == sharedState.curCat then
@@ -690,8 +788,14 @@ function Window:Create(lib, config)
             end
         end
 
-        if not currentHasMatch and firstMatchTabIdx then
-            swapCat(firstMatchTabIdx)
+        if matchTotal == 0 then
+            emptySub.Text = "Nothing matched \"" .. tostring(rawQuery or ""):match("^%s*(.-)%s*$") .. "\""
+            searchEmptyState.Visible = true
+        else
+            searchEmptyState.Visible = false
+            if not currentHasMatch and firstMatchTabIdx then
+                swapCat(firstMatchTabIdx)
+            end
         end
     end
 
@@ -778,8 +882,13 @@ function Window:Create(lib, config)
         if ctx.SpSortStr then ctx.SpSortStr.Color = t.Stroke end
         if searchHolder and searchStroke then
             searchHolder.BackgroundColor3 = t.BoxBg
-            searchStroke.Color = t.Stroke
+            searchStroke.Color = searchFocused and t.Accent or t.Stroke
         end
+        sideSlider.BackgroundColor3 = t.Accent2 or Color3.new(1, 1, 1)
+        emptyCard.BackgroundColor3 = t.CardBg
+        emptyStroke.Color = t.Stroke
+        emptySub.TextColor3 = t.SubText
+        emptyClearBtn.BackgroundColor3 = t.Accent
         if clearBtn then
             clearBtn.BackgroundColor3 = t.SwitchOff or t.BoxBg
             if clearBarA then clearBarA.BackgroundColor3 = t.SubText end
@@ -845,7 +954,7 @@ function Window:Create(lib, config)
     end
 
     local function registerSidebarButton(tabData, idx)
-        local btn = Instance.new("TextButton", side)
+        local btn = Instance.new("TextButton", sideBtns)
         btn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
         btn.BackgroundTransparency = 0.25
         btn.Size = UDim2.new(1, 0, 0, 38)
@@ -1081,6 +1190,7 @@ function Window:Create(lib, config)
         end))
 
         table.insert(ctx.Connections, searchInp.FocusLost:Connect(function()
+            searchFocused = false
             filterSearch(searchInp.Text)
             Animations:Tween(searchStroke, Animations.Fast, {
                 Color = ctx.ActiveTheme.Stroke,
@@ -1092,6 +1202,7 @@ function Window:Create(lib, config)
         end))
 
         table.insert(ctx.Connections, searchInp.Focused:Connect(function()
+            searchFocused = true
             Animations:Tween(searchStroke, Animations.Fast, {
                 Color = ctx.ActiveTheme.Accent,
                 Transparency = 0.15
@@ -1099,6 +1210,11 @@ function Window:Create(lib, config)
             Animations:Tween(searchHolder, Animations.Fast, {
                 BackgroundTransparency = 0.18
             })
+        end))
+
+        table.insert(ctx.Connections, emptyClearBtn.MouseButton1Click:Connect(function()
+            searchInp.Text = ""
+            filterSearch("")
         end))
 
         if clearBtn then
