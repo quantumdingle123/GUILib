@@ -109,7 +109,7 @@ function Modals:ShowDiscord(ctx, inviteUrl)
     local activeTheme = ctx.ActiveTheme
     local Animations = ctx.Animations
     local Utils = ctx.Utils
-    local url = inviteUrl or "https://discord.gg/DHVH8qbkkE"
+    local url = inviteUrl or "https://discord.gg/qySS87MQ6S"
 
     elevateIdentity(Utils)
 
