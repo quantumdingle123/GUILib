@@ -50,6 +50,7 @@ function Modals:ShowWarning(ctx, title, text)
     Utils:RoundCorner(card, 20)
 
     local cardStr = Instance.new("UIStroke")
+    if Utils.ApplyBorderStroke then Utils:ApplyBorderStroke(cardStr) end
     cardStr.Thickness = 1.3
     cardStr.Color = Color3.fromRGB(255, 185, 65)
     cardStr.Transparency = 0.15
@@ -129,6 +130,7 @@ function Modals:ShowDiscord(ctx, inviteUrl)
     Utils:RoundCorner(card, 22)
 
     local cardStr = Instance.new("UIStroke")
+    if Utils.ApplyBorderStroke then Utils:ApplyBorderStroke(cardStr) end
     cardStr.Thickness = 1.4
     cardStr.Color = activeTheme.Stroke
     cardStr.Transparency = 0.20
@@ -247,6 +249,7 @@ function Modals:Notify(ctx, opts)
     Utils:RoundCorner(toast, 14)
 
     local st = Instance.new("UIStroke")
+    if Utils.ApplyBorderStroke then Utils:ApplyBorderStroke(st) end
     st.Thickness = 1.2
     st.Color = activeTheme.Accent
     st.Transparency = 0.25

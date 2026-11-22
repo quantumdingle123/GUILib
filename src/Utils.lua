@@ -243,6 +243,84 @@ function Utils:MakeGradient(parent, rotation)
     return g
 end
 
+local GRAIN_TEXTURE_ID = "rbxassetid://117266253034518"
+local ORGANIC_TEXTURE_ID = "rbxassetid://76361536958443"
+
+function Utils:MutedStrokeColor(strokeColor, darkAmount)
+    local base = strokeColor or Color3.fromRGB(110, 120, 138)
+    return base:Lerp(Color3.fromRGB(10, 12, 16), darkAmount or 0.55)
+end
+
+function Utils:ApplyBorderStroke(stroke)
+    if not stroke or not stroke:IsA("UIStroke") then return stroke end
+    stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    pcall(function()
+        stroke.BorderStrokePosition = Enum.BorderStrokePosition.Inner
+    end)
+    return stroke
+end
+
+function Utils:ApplySurfaceMaterial(target, opts)
+    if not target or typeof(target) ~= "Instance" then return nil end
+    opts = opts or {}
+    local mode = opts.Mode or "Chassis"
+    local zIdx = opts.ZIndex or 1
+    if opts.ClipsDescendants ~= false then
+        target.ClipsDescendants = true
+    end
+
+    local layer = Instance.new("Frame")
+    layer.Name = "SurfaceMaterialLayer"
+    layer.Size = UDim2.fromScale(1, 1)
+    layer.BackgroundTransparency = 1
+    layer.BorderSizePixel = 0
+    layer.ClipsDescendants = true
+    layer.ZIndex = zIdx
+    layer:SetAttribute("NoTrans", true)
+    if opts.CornerRadius then
+        self:RoundCorner(layer, opts.CornerRadius)
+    end
+
+    if mode == "Chassis" or mode == "Well" then
+        local org = Instance.new("ImageLabel")
+        org.Name = "OrganicTone"
+        org.Size = UDim2.fromScale(1, 1)
+        org.BackgroundTransparency = 1
+        org.BorderSizePixel = 0
+        org.Image = ORGANIC_TEXTURE_ID
+        org.ScaleType = Enum.ScaleType.Tile
+        org.TileSize = UDim2.fromOffset(240, 240)
+        org.ImageColor3 = Color3.fromRGB(255, 255, 255)
+        org.ImageTransparency = opts.OrganicTransparency or 0.93
+        org.ZIndex = 1
+        org:SetAttribute("NoTrans", true)
+        if opts.CornerRadius then
+            self:RoundCorner(org, opts.CornerRadius)
+        end
+        org.Parent = layer
+    end
+
+    local grain = Instance.new("ImageLabel")
+    grain.Name = "SurfaceGrain"
+    grain.Size = UDim2.fromScale(1, 1)
+    grain.BackgroundTransparency = 1
+    grain.BorderSizePixel = 0
+    grain.Image = GRAIN_TEXTURE_ID
+    grain.ScaleType = Enum.ScaleType.Tile
+    grain.TileSize = UDim2.fromOffset(112, 112)
+    grain.ImageColor3 = Color3.fromRGB(255, 255, 255)
+    grain.ImageTransparency = opts.GrainTransparency or 0.91
+    grain.ZIndex = 2
+    grain:SetAttribute("NoTrans", true)
+    if opts.CornerRadius then
+        self:RoundCorner(grain, opts.CornerRadius)
+    end
+    grain.Parent = layer
+
+    layer.Parent = target
+    return layer
+end
+
 function Utils:MakeDraggable(handle, target, connList)
     if not handle or not target then return end
     handle.Active = true

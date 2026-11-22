@@ -45,15 +45,17 @@ function Panels:SetupPriorityPanel(ctx, priorityPg, opts)
             local card = Instance.new("Frame")
             card.Size = UDim2.new(1, -2, 0, 50)
             card.BackgroundColor3 = activeTheme.CardBg
-            card.BackgroundTransparency = 0.20
+            card.BackgroundTransparency = 0.02
             card.BorderSizePixel = 0
+            card.ClipsDescendants = true
             card.LayoutOrder = index
             Utils:RoundCorner(card, 12)
 
             local cardStroke = Instance.new("UIStroke")
-            cardStroke.Color = (index == 1) and activeTheme.Accent or activeTheme.Stroke
+            if Utils.ApplyBorderStroke then Utils:ApplyBorderStroke(cardStroke) end
+            cardStroke.Color = (index == 1) and activeTheme.Accent or (Utils.MutedStrokeColor and Utils:MutedStrokeColor(activeTheme.Stroke, 0.55) or activeTheme.Stroke)
             cardStroke.Thickness = (index == 1) and 1.5 or 1
-            cardStroke.Transparency = (index == 1) and 0 or 0.35
+            cardStroke.Transparency = (index == 1) and 0 or 0.32
             cardStroke.Parent = card
 
             local badge = Instance.new("TextLabel")
@@ -110,7 +112,8 @@ function Panels:SetupPriorityPanel(ctx, priorityPg, opts)
             upBtn:SetAttribute("NoTrans", true)
             Utils:RoundCorner(upBtn, 8)
             local upStr = Instance.new("UIStroke")
-            upStr.Color = activeTheme.Stroke
+            if Utils.ApplyBorderStroke then Utils:ApplyBorderStroke(upStr) end
+            upStr.Color = Utils.MutedStrokeColor and Utils:MutedStrokeColor(activeTheme.Stroke, 0.55) or activeTheme.Stroke
             upStr.Thickness = 1
             upStr.Transparency = (index > 1) and 0.30 or 0.65
             upStr.Parent = upBtn
@@ -129,7 +132,8 @@ function Panels:SetupPriorityPanel(ctx, priorityPg, opts)
             downBtn:SetAttribute("NoTrans", true)
             Utils:RoundCorner(downBtn, 8)
             local downStr = Instance.new("UIStroke")
-            downStr.Color = activeTheme.Stroke
+            if Utils.ApplyBorderStroke then Utils:ApplyBorderStroke(downStr) end
+            downStr.Color = Utils.MutedStrokeColor and Utils:MutedStrokeColor(activeTheme.Stroke, 0.55) or activeTheme.Stroke
             downStr.Thickness = 1
             downStr.Transparency = (index < #list) and 0.30 or 0.65
             downStr.Parent = downBtn
@@ -187,8 +191,9 @@ function Panels:SetupStealPanel(ctx, stealPanelPg, opts)
     spSortBtn.Size = UDim2.new(0, 150, 0, 26)
     spSortBtn.Position = UDim2.new(0, 62, 0.5, -13)
     spSortBtn.BackgroundColor3 = ctx.ActiveTheme.BoxBg
-    spSortBtn.BackgroundTransparency = 0.15
+    spSortBtn.BackgroundTransparency = 0.04
     spSortBtn.BorderSizePixel = 0
+    spSortBtn.ClipsDescendants = true
     spSortBtn.Font = Enum.Font.GothamBold
     spSortBtn.TextSize = 11
     spSortBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -198,8 +203,9 @@ function Panels:SetupStealPanel(ctx, stealPanelPg, opts)
     Animations:AttachTactile(spSortBtn, ctx.Connections)
 
     local spSortStr = Instance.new("UIStroke", spSortBtn)
+    if Utils.ApplyBorderStroke then Utils:ApplyBorderStroke(spSortStr) end
     spSortStr.Thickness = 1
-    spSortStr.Color = ctx.ActiveTheme.Stroke
+    spSortStr.Color = Utils.MutedStrokeColor and Utils:MutedStrokeColor(ctx.ActiveTheme.Stroke, 0.55) or ctx.ActiveTheme.Stroke
     spSortStr.Transparency = 0.35
 
     ctx.SpSortBtn = spSortBtn
@@ -266,15 +272,17 @@ function Panels:SetupStealPanel(ctx, stealPanelPg, opts)
             local card = Instance.new("Frame")
             card.Size = UDim2.new(1, -4, 0, 50)
             card.BackgroundColor3 = activeTheme.CardBg
-            card.BackgroundTransparency = 0.20
+            card.BackgroundTransparency = 0.02
             card.BorderSizePixel = 0
+            card.ClipsDescendants = true
             card.LayoutOrder = i
             Utils:RoundCorner(card, 12)
 
             local cStr = Instance.new("UIStroke")
+            if Utils.ApplyBorderStroke then Utils:ApplyBorderStroke(cStr) end
             cStr.Thickness = 1
-            cStr.Color = activeTheme.Stroke
-            cStr.Transparency = 0.40
+            cStr.Color = Utils.MutedStrokeColor and Utils:MutedStrokeColor(activeTheme.Stroke, 0.55) or activeTheme.Stroke
+            cStr.Transparency = 0.32
             cStr.Parent = card
 
             local img = Instance.new("ImageLabel")

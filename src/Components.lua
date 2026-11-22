@@ -32,6 +32,24 @@ local function safeParent(utils, inst, parent)
     return ok
 end
 
+local function mutedStroke(utils, col, amt)
+    if utils and utils.MutedStrokeColor then
+        return utils:MutedStrokeColor(col, amt)
+    end
+    return col
+end
+
+local function applyBorderStroke(utils, stroke)
+    if utils and utils.ApplyBorderStroke then
+        return utils:ApplyBorderStroke(stroke)
+    end
+    if stroke and stroke:IsA("UIStroke") then
+        stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+        pcall(function() stroke.BorderStrokePosition = Enum.BorderStrokePosition.Inner end)
+    end
+    return stroke
+end
+
 -- Position floating dropdown/multi-dropdown menus in PopupOverlayLayer space
 -- (which starts below TitleBar) so menus sit close to their trigger with a crisp gap.
 local function updateFloatingDropPlacement(frm, cntFrame, popupLayer, parent, box, dropArea, dropHeight)
@@ -93,22 +111,32 @@ function Components:CreateCategory(ctx, title, parent, order, defaultOpen)
     local frame = Instance.new("Frame", parent)
     frame.Size = UDim2.new(1, 0, 0, 44)
     frame.BackgroundColor3 = activeTheme.CardBg
-    frame.BackgroundTransparency = 0.22
+    frame.BackgroundTransparency = 0.02
     frame.BorderSizePixel = 0
     frame.ClipsDescendants = true
     frame.LayoutOrder = order or 1
     Utils:RoundCorner(frame, 14)
 
-    local fStr = Instance.new("UIStroke", frame)
+    local fStr = applyBorderStroke(Utils, Instance.new("UIStroke", frame))
     fStr.Thickness = 1
-    fStr.Color = activeTheme.Stroke
+    fStr.Color = mutedStroke(Utils, activeTheme.Stroke, 0.55)
     fStr.Transparency = 0.35
+
+    if Utils.ApplySurfaceMaterial then
+        Utils:ApplySurfaceMaterial(frame, {
+            Mode = "Card",
+            CornerRadius = 14,
+            GrainTransparency = 0.92,
+            ZIndex = 1,
+        })
+    end
 
     local header = Instance.new("TextButton", frame)
     header.Size = UDim2.new(1, 0, 0, 44)
     header.BackgroundTransparency = 1
     header.Text = ""
     header.AutoButtonColor = false
+    header.ZIndex = 2
 
     local bar = Instance.new("Frame", header)
     bar.Size = UDim2.new(0, 3.5, 0, 18)
@@ -142,9 +170,10 @@ function Components:CreateCategory(ctx, title, parent, order, defaultOpen)
     local divLine = Instance.new("Frame", frame)
     divLine.Size = UDim2.new(1, -24, 0, 1)
     divLine.Position = UDim2.new(0, 12, 0, 44)
-    divLine.BackgroundColor3 = activeTheme.Stroke
-    divLine.BackgroundTransparency = defaultOpen and 0.50 or 1
+    divLine.BackgroundColor3 = mutedStroke(Utils, activeTheme.Stroke, 0.45)
+    divLine.BackgroundTransparency = defaultOpen and 0.45 or 1
     divLine.BorderSizePixel = 0
+    divLine.ZIndex = 2
     divLine:SetAttribute("NoTrans", true)
 
     -- Position content at Y = 56 (12px breathing room below the 44px header)
@@ -154,6 +183,7 @@ function Components:CreateCategory(ctx, title, parent, order, defaultOpen)
     content.Size = UDim2.new(1, 0, 0, 0)
     content.BackgroundTransparency = 1
     content.Visible = true
+    content.ZIndex = 2
 
     local cPad = Instance.new("UIPadding", content)
     cPad.PaddingLeft = UDim.new(0, 10)
@@ -210,10 +240,10 @@ function Components:CreateCategory(ctx, title, parent, order, defaultOpen)
 
     table.insert(ctx.State.themeSubscribers, function(th)
         frame.BackgroundColor3 = th.CardBg
-        fStr.Color = th.Stroke
+        fStr.Color = mutedStroke(Utils, th.Stroke, 0.55)
         bar.BackgroundColor3 = th.Accent
         arrow.TextColor3 = th.Accent2
-        divLine.BackgroundColor3 = th.Stroke
+        divLine.BackgroundColor3 = mutedStroke(Utils, th.Stroke, 0.45)
     end)
 
     -- Build object API for adding controls directly to this category
@@ -360,15 +390,16 @@ function Components:CreateKeybind(ctx, title, desc, defaultKey, parent, order, c
     local row = Instance.new("Frame", parent)
     row.Size = UDim2.new(1, 0, 0, 52)
     row.BackgroundColor3 = activeTheme.RowBg
-    row.BackgroundTransparency = 0.22
+    row.BackgroundTransparency = 0.03
     row.BorderSizePixel = 0
+    row.ClipsDescendants = true
     row.LayoutOrder = order or 1
     Utils:RoundCorner(row, 10)
 
-    local rowStr = Instance.new("UIStroke", row)
+    local rowStr = applyBorderStroke(Utils, Instance.new("UIStroke", row))
     rowStr.Thickness = 1
-    rowStr.Color = activeTheme.Stroke
-    rowStr.Transparency = 0.40
+    rowStr.Color = mutedStroke(Utils, activeTheme.Stroke, 0.55)
+    rowStr.Transparency = 0.35
 
     local tit = Instance.new("TextLabel", row)
     tit.Size = UDim2.new(1, -110, 0, 18)
@@ -397,7 +428,7 @@ function Components:CreateKeybind(ctx, title, desc, defaultKey, parent, order, c
     btn.Size = normalBadgeSize
     btn.Position = UDim2.new(1, -10, 0.5, 0)
     btn.BackgroundColor3 = activeTheme.BoxBg
-    btn.BackgroundTransparency = 0.15
+    btn.BackgroundTransparency = 0.04
     btn.BorderSizePixel = 0
     btn.Font = Enum.Font.GothamBold
     btn.TextSize = 11
@@ -406,9 +437,9 @@ function Components:CreateKeybind(ctx, title, desc, defaultKey, parent, order, c
     btn:SetAttribute("NoTrans", true)
     Utils:RoundCorner(btn, 8)
 
-    local btnStr = Instance.new("UIStroke", btn)
+    local btnStr = applyBorderStroke(Utils, Instance.new("UIStroke", btn))
     btnStr.Thickness = 1
-    btnStr.Color = activeTheme.Stroke
+    btnStr.Color = mutedStroke(Utils, activeTheme.Stroke, 0.55)
     btnStr.Transparency = 0.35
     btnStr:SetAttribute("NoTrans", true)
 
@@ -436,7 +467,7 @@ function Components:CreateKeybind(ctx, title, desc, defaultKey, parent, order, c
         if not isListening then return end
         isListening = false
         disconnectListenConn()
-        btnStr.Color = ctx.ActiveTheme.Stroke
+        btnStr.Color = mutedStroke(Utils, ctx.ActiveTheme.Stroke, 0.55)
         btnStr.Thickness = 1
         btn.BackgroundColor3 = ctx.ActiveTheme.BoxBg
         btn.Text = "[ " .. formatKeyCode(currentKey) .. " ]"
@@ -462,7 +493,7 @@ function Components:CreateKeybind(ctx, title, desc, defaultKey, parent, order, c
             task.delay(0.20, function()
                 if not isListening then
                     Animations:Tween(btn, Animations.Smooth, { BackgroundColor3 = ctx.ActiveTheme.BoxBg })
-                    Animations:Tween(btnStr, Animations.Smooth, { Color = ctx.ActiveTheme.Stroke })
+                    Animations:Tween(btnStr, Animations.Smooth, { Color = mutedStroke(Utils, ctx.ActiveTheme.Stroke, 0.55) })
                 end
             end)
         end)
@@ -593,11 +624,11 @@ function Components:CreateKeybind(ctx, title, desc, defaultKey, parent, order, c
 
     table.insert(ctx.State.themeSubscribers, function(th)
         row.BackgroundColor3 = th.RowBg
-        rowStr.Color = th.Stroke
+        rowStr.Color = mutedStroke(Utils, th.Stroke, 0.55)
         sub.TextColor3 = th.SubText
         if not isListening then
             btn.BackgroundColor3 = th.BoxBg
-            btnStr.Color = th.Stroke
+            btnStr.Color = mutedStroke(Utils, th.Stroke, 0.55)
         else
             btn.BackgroundColor3 = th.Accent
             btnStr.Color = th.Accent2
@@ -631,15 +662,16 @@ function Components:CreateToggle(ctx, title, desc, defaultState, parent, order, 
     local row = Instance.new("Frame", parent)
     row.Size = UDim2.new(1, 0, 0, 52)
     row.BackgroundColor3 = activeTheme.RowBg
-    row.BackgroundTransparency = 0.22
+    row.BackgroundTransparency = 0.03
     row.BorderSizePixel = 0
+    row.ClipsDescendants = true
     row.LayoutOrder = order or 1
     Utils:RoundCorner(row, 10)
 
-    local rowStr = Instance.new("UIStroke", row)
+    local rowStr = applyBorderStroke(Utils, Instance.new("UIStroke", row))
     rowStr.Thickness = 1
-    rowStr.Color = activeTheme.Stroke
-    rowStr.Transparency = 0.40
+    rowStr.Color = mutedStroke(Utils, activeTheme.Stroke, 0.55)
+    rowStr.Transparency = 0.35
 
     local tit = Instance.new("TextLabel", row)
     tit.Size = UDim2.new(1, -76, 0, 18)
@@ -674,10 +706,10 @@ function Components:CreateToggle(ctx, title, desc, defaultState, parent, order, 
     sw:SetAttribute("NoTrans", true)
     Utils:RoundCorner(sw, 999)
 
-    local swStr = Instance.new("UIStroke", sw)
+    local swStr = applyBorderStroke(Utils, Instance.new("UIStroke", sw))
     swStr.Thickness = 1.2
-    swStr.Color = state and activeTheme.Accent2 or activeTheme.Stroke
-    swStr.Transparency = state and 0.15 or 0.25
+    swStr.Color = state and activeTheme.Accent2 or mutedStroke(Utils, activeTheme.Stroke, 0.55)
+    swStr.Transparency = state and 0.15 or 0.35
     swStr:SetAttribute("NoTrans", true)
 
     local dot = Instance.new("Frame", sw)
@@ -696,8 +728,8 @@ function Components:CreateToggle(ctx, title, desc, defaultState, parent, order, 
             BackgroundTransparency = state and 0 or 0.12
         })
         Animations:Tween(swStr, Animations.Fast, {
-            Color = state and ctx.ActiveTheme.Accent2 or ctx.ActiveTheme.Stroke,
-            Transparency = state and 0.15 or 0.25
+            Color = state and ctx.ActiveTheme.Accent2 or mutedStroke(Utils, ctx.ActiveTheme.Stroke, 0.55),
+            Transparency = state and 0.15 or 0.35
         })
         Animations:Tween(dot, Animations.iOSSpring, {
             Position = state and UDim2.new(1, -21, 0.5, 0) or UDim2.new(0, 3, 0.5, 0)
@@ -713,14 +745,14 @@ function Components:CreateToggle(ctx, title, desc, defaultState, parent, order, 
 
     table.insert(ctx.State.themeSubscribers, function(th)
         row.BackgroundColor3 = th.RowBg
-        rowStr.Color = th.Stroke
+        rowStr.Color = mutedStroke(Utils, th.Stroke, 0.55)
         sub.TextColor3 = th.SubText
         if state then
             sw.BackgroundColor3 = th.Accent
             swStr.Color = th.Accent2
         else
             sw.BackgroundColor3 = th.SwitchOff
-            swStr.Color = th.Stroke
+            swStr.Color = mutedStroke(Utils, th.Stroke, 0.55)
         end
     end)
 
@@ -758,15 +790,16 @@ function Components:CreateSlider(ctx, title, desc, min, max, defaultVal, increme
     local row = Instance.new("Frame", parent)
     row.Size = UDim2.new(1, 0, 0, 52)
     row.BackgroundColor3 = activeTheme.RowBg
-    row.BackgroundTransparency = 0.22
+    row.BackgroundTransparency = 0.03
     row.BorderSizePixel = 0
+    row.ClipsDescendants = true
     row.LayoutOrder = order or 1
     Utils:RoundCorner(row, 10)
 
-    local rowStr = Instance.new("UIStroke", row)
+    local rowStr = applyBorderStroke(Utils, Instance.new("UIStroke", row))
     rowStr.Thickness = 1
-    rowStr.Color = activeTheme.Stroke
-    rowStr.Transparency = 0.40
+    rowStr.Color = mutedStroke(Utils, activeTheme.Stroke, 0.55)
+    rowStr.Transparency = 0.35
 
     local tit = Instance.new("TextLabel", row)
     tit.Size = UDim2.new(1, -leftReserve, 0, 18)
@@ -828,7 +861,7 @@ function Components:CreateSlider(ctx, title, desc, min, max, defaultVal, increme
     kn:SetAttribute("NoTrans", true)
     Utils:RoundCorner(kn, 999)
 
-    local knStr = Instance.new("UIStroke", kn)
+    local knStr = applyBorderStroke(Utils, Instance.new("UIStroke", kn))
     knStr.Thickness = 1
     knStr.Color = Color3.fromRGB(200, 205, 220)
     knStr.Transparency = 0.4
@@ -869,7 +902,7 @@ function Components:CreateSlider(ctx, title, desc, min, max, defaultVal, increme
 
     table.insert(ctx.State.themeSubscribers, function(th)
         row.BackgroundColor3 = th.RowBg
-        rowStr.Color = th.Stroke
+        rowStr.Color = mutedStroke(Utils, th.Stroke, 0.55)
         sub.TextColor3 = th.SubText
         valLbl.TextColor3 = th.Accent2
         fil.BackgroundColor3 = th.Accent
@@ -901,15 +934,16 @@ function Components:CreateDropdown(ctx, title, desc, items, defaultVal, parent, 
     local row = Instance.new("Frame", parent)
     row.Size = UDim2.new(1, 0, 0, 52)
     row.BackgroundColor3 = activeTheme.RowBg
-    row.BackgroundTransparency = 0.22
+    row.BackgroundTransparency = 0.03
     row.BorderSizePixel = 0
+    row.ClipsDescendants = true
     row.LayoutOrder = order or 1
     Utils:RoundCorner(row, 10)
 
-    local rowStr = Instance.new("UIStroke", row)
+    local rowStr = applyBorderStroke(Utils, Instance.new("UIStroke", row))
     rowStr.Thickness = 1
-    rowStr.Color = activeTheme.Stroke
-    rowStr.Transparency = 0.40
+    rowStr.Color = mutedStroke(Utils, activeTheme.Stroke, 0.55)
+    rowStr.Transparency = 0.35
 
     local tit = Instance.new("TextLabel", row)
     tit.Size = UDim2.new(1, -(dropWidth + 24), 0, 18)
@@ -937,17 +971,17 @@ function Components:CreateDropdown(ctx, title, desc, items, defaultVal, parent, 
     box.Size = UDim2.new(0, dropWidth, 0, 28)
     box.Position = UDim2.new(1, -10, 0.5, 0)
     box.BackgroundColor3 = activeTheme.BoxBg
-    box.BackgroundTransparency = 0.12
+    box.BackgroundTransparency = 0.04
     box.BorderSizePixel = 0
     box.Text = ""
     box.AutoButtonColor = false
     box:SetAttribute("NoTrans", true)
     Utils:RoundCorner(box, 8)
 
-    local boxStr = Instance.new("UIStroke", box)
+    local boxStr = applyBorderStroke(Utils, Instance.new("UIStroke", box))
     boxStr.Thickness = 1
-    boxStr.Color = activeTheme.Stroke
-    boxStr.Transparency = 0.30
+    boxStr.Color = mutedStroke(Utils, activeTheme.Stroke, 0.55)
+    boxStr.Transparency = 0.35
     boxStr:SetAttribute("NoTrans", true)
 
     local valLbl = Instance.new("TextLabel", box)
@@ -982,10 +1016,10 @@ function Components:CreateDropdown(ctx, title, desc, items, defaultVal, parent, 
     dropArea:SetAttribute("NoTrans", true)
     Utils:RoundCorner(dropArea, 8)
 
-    local dropAreaStr = Instance.new("UIStroke", dropArea)
+    local dropAreaStr = applyBorderStroke(Utils, Instance.new("UIStroke", dropArea))
     dropAreaStr.Thickness = 1.2
-    dropAreaStr.Color = activeTheme.Stroke
-    dropAreaStr.Transparency = 0.20
+    dropAreaStr.Color = mutedStroke(Utils, activeTheme.Stroke, 0.55)
+    dropAreaStr.Transparency = 0.25
     dropAreaStr:SetAttribute("NoTrans", true)
 
     local optScrl = Instance.new("ScrollingFrame", dropArea)
@@ -1024,7 +1058,7 @@ function Components:CreateDropdown(ctx, title, desc, items, defaultVal, parent, 
             local btn = Instance.new("TextButton")
             btn.Size = UDim2.new(1, -4, 0, 24)
             btn.BackgroundColor3 = isSel and ctx.ActiveTheme.Accent or ctx.ActiveTheme.RowBg
-            btn.BackgroundTransparency = isSel and 0.08 or 0.30
+            btn.BackgroundTransparency = isSel and 0.02 or 0.06
             btn.Text = (isSel and "  ✓ " or "    ") .. itemStr
             btn.TextColor3 = Color3.fromRGB(255, 255, 255)
             btn.Font = isSel and Enum.Font.GothamBold or Enum.Font.GothamMedium
@@ -1055,7 +1089,7 @@ function Components:CreateDropdown(ctx, title, desc, items, defaultVal, parent, 
         arr.Text = "v"
         valLbl.Text = currentVal
         valLbl.TextColor3 = Color3.fromRGB(255, 255, 255)
-        boxStr.Color = ctx.ActiveTheme.Stroke
+        boxStr.Color = mutedStroke(Utils, ctx.ActiveTheme.Stroke, 0.55)
         activeDropTween = Animations:Tween(dropArea, Animations.Fast, { Size = UDim2.new(0, dropWidth, 0, 0) })
         if activeDropTween then
             activeDropTween.Completed:Connect(function()
@@ -1110,13 +1144,13 @@ function Components:CreateDropdown(ctx, title, desc, items, defaultVal, parent, 
 
     table.insert(ctx.State.themeSubscribers, function(th, isLiveTick)
         row.BackgroundColor3 = th.RowBg
-        rowStr.Color = th.Stroke
+        rowStr.Color = mutedStroke(Utils, th.Stroke, 0.55)
         sub.TextColor3 = th.SubText
         box.BackgroundColor3 = th.BoxBg
-        boxStr.Color = isExpanded and th.Accent2 or th.Stroke
+        boxStr.Color = isExpanded and th.Accent2 or mutedStroke(Utils, th.Stroke, 0.55)
         valLbl.TextColor3 = isExpanded and th.SubText or Color3.fromRGB(255, 255, 255)
         dropArea.BackgroundColor3 = th.DropBg
-        dropAreaStr.Color = th.Stroke
+        dropAreaStr.Color = mutedStroke(Utils, th.Stroke, 0.55)
         optScrl.ScrollBarImageColor3 = th.Accent2
         arr.TextColor3 = th.Accent2
         if isExpanded and not isLiveTick then populateOptions() end
@@ -1180,15 +1214,16 @@ function Components:CreateMultiDropdown(ctx, title, desc, items, defaultMap, par
     local row = Instance.new("Frame", parent)
     row.Size = UDim2.new(1, 0, 0, 52)
     row.BackgroundColor3 = activeTheme.RowBg
-    row.BackgroundTransparency = 0.22
+    row.BackgroundTransparency = 0.03
     row.BorderSizePixel = 0
+    row.ClipsDescendants = true
     row.LayoutOrder = order or 1
     Utils:RoundCorner(row, 10)
 
-    local rowStr = Instance.new("UIStroke", row)
+    local rowStr = applyBorderStroke(Utils, Instance.new("UIStroke", row))
     rowStr.Thickness = 1
-    rowStr.Color = activeTheme.Stroke
-    rowStr.Transparency = 0.40
+    rowStr.Color = mutedStroke(Utils, activeTheme.Stroke, 0.55)
+    rowStr.Transparency = 0.35
 
     local tit = Instance.new("TextLabel", row)
     tit.Size = UDim2.new(1, -(dropWidth + 24), 0, 18)
@@ -1216,17 +1251,17 @@ function Components:CreateMultiDropdown(ctx, title, desc, items, defaultMap, par
     box.Size = UDim2.new(0, dropWidth, 0, 28)
     box.Position = UDim2.new(1, -10, 0.5, 0)
     box.BackgroundColor3 = activeTheme.BoxBg
-    box.BackgroundTransparency = 0.12
+    box.BackgroundTransparency = 0.04
     box.BorderSizePixel = 0
     box.Text = ""
     box.AutoButtonColor = false
     box:SetAttribute("NoTrans", true)
     Utils:RoundCorner(box, 8)
 
-    local boxStr = Instance.new("UIStroke", box)
+    local boxStr = applyBorderStroke(Utils, Instance.new("UIStroke", box))
     boxStr.Thickness = 1
-    boxStr.Color = activeTheme.Stroke
-    boxStr.Transparency = 0.30
+    boxStr.Color = mutedStroke(Utils, activeTheme.Stroke, 0.55)
+    boxStr.Transparency = 0.35
     boxStr:SetAttribute("NoTrans", true)
 
     local valLbl = Instance.new("TextLabel", box)
@@ -1292,10 +1327,10 @@ function Components:CreateMultiDropdown(ctx, title, desc, items, defaultMap, par
     dropArea:SetAttribute("NoTrans", true)
     Utils:RoundCorner(dropArea, 8)
 
-    local dropAreaStr = Instance.new("UIStroke", dropArea)
+    local dropAreaStr = applyBorderStroke(Utils, Instance.new("UIStroke", dropArea))
     dropAreaStr.Thickness = 1.2
-    dropAreaStr.Color = activeTheme.Stroke
-    dropAreaStr.Transparency = 0.20
+    dropAreaStr.Color = mutedStroke(Utils, activeTheme.Stroke, 0.55)
+    dropAreaStr.Transparency = 0.25
     dropAreaStr:SetAttribute("NoTrans", true)
 
     local optScrl = Instance.new("ScrollingFrame", dropArea)
@@ -1334,7 +1369,7 @@ function Components:CreateMultiDropdown(ctx, title, desc, items, defaultMap, par
             local btn = Instance.new("TextButton")
             btn.Size = UDim2.new(1, -4, 0, 24)
             btn.BackgroundColor3 = isSel and ctx.ActiveTheme.Accent or ctx.ActiveTheme.RowBg
-            btn.BackgroundTransparency = isSel and 0.08 or 0.30
+            btn.BackgroundTransparency = isSel and 0.02 or 0.06
             btn.Text = (isSel and "  ✓ " or "    ") .. itemStr
             btn.TextColor3 = Color3.fromRGB(255, 255, 255)
             btn.Font = isSel and Enum.Font.GothamBold or Enum.Font.GothamMedium
@@ -1388,7 +1423,7 @@ function Components:CreateMultiDropdown(ctx, title, desc, items, defaultMap, par
         if activeDropTween then pcall(function() activeDropTween:Cancel() end) end
         arr.Text = "v"
         updateSummaryLabel()
-        boxStr.Color = ctx.ActiveTheme.Stroke
+        boxStr.Color = mutedStroke(Utils, ctx.ActiveTheme.Stroke, 0.55)
         activeDropTween = Animations:Tween(dropArea, Animations.Fast, { Size = UDim2.new(0, dropWidth, 0, 0) })
         if activeDropTween then
             activeDropTween.Completed:Connect(function()
@@ -1442,13 +1477,13 @@ function Components:CreateMultiDropdown(ctx, title, desc, items, defaultMap, par
 
     table.insert(ctx.State.themeSubscribers, function(th, isLiveTick)
         row.BackgroundColor3 = th.RowBg
-        rowStr.Color = th.Stroke
+        rowStr.Color = mutedStroke(Utils, th.Stroke, 0.55)
         sub.TextColor3 = th.SubText
         box.BackgroundColor3 = th.BoxBg
-        boxStr.Color = isExpanded and th.Accent2 or th.Stroke
+        boxStr.Color = isExpanded and th.Accent2 or mutedStroke(Utils, th.Stroke, 0.55)
         updateSummaryLabel()
         dropArea.BackgroundColor3 = th.DropBg
-        dropAreaStr.Color = th.Stroke
+        dropAreaStr.Color = mutedStroke(Utils, th.Stroke, 0.55)
         optScrl.ScrollBarImageColor3 = th.Accent2
         arr.TextColor3 = th.Accent2
         if isExpanded and not isLiveTick then populateOptions() end
@@ -1478,15 +1513,16 @@ function Components:CreateButton(ctx, title, desc, btnText, parent, order, callb
     local row = Instance.new("Frame", parent)
     row.Size = UDim2.new(1, 0, 0, 52)
     row.BackgroundColor3 = activeTheme.RowBg
-    row.BackgroundTransparency = 0.22
+    row.BackgroundTransparency = 0.03
     row.BorderSizePixel = 0
+    row.ClipsDescendants = true
     row.LayoutOrder = order or 1
     Utils:RoundCorner(row, 10)
 
-    local rowStr = Instance.new("UIStroke", row)
+    local rowStr = applyBorderStroke(Utils, Instance.new("UIStroke", row))
     rowStr.Thickness = 1
-    rowStr.Color = activeTheme.Stroke
-    rowStr.Transparency = 0.40
+    rowStr.Color = mutedStroke(Utils, activeTheme.Stroke, 0.55)
+    rowStr.Transparency = 0.35
 
     local tit = Instance.new("TextLabel", row)
     tit.Size = UDim2.new(1, -110, 0, 18)
@@ -1529,7 +1565,7 @@ function Components:CreateButton(ctx, title, desc, btnText, parent, order, callb
 
     table.insert(ctx.State.themeSubscribers, function(th)
         row.BackgroundColor3 = th.RowBg
-        rowStr.Color = th.Stroke
+        rowStr.Color = mutedStroke(Utils, th.Stroke, 0.55)
         sub.TextColor3 = th.SubText
         btn.BackgroundColor3 = th.Accent
     end)
@@ -1547,15 +1583,16 @@ function Components:CreateTextbox(ctx, title, desc, placeholder, defaultText, pa
     local row = Instance.new("Frame", parent)
     row.Size = UDim2.new(1, 0, 0, 52)
     row.BackgroundColor3 = activeTheme.RowBg
-    row.BackgroundTransparency = 0.22
+    row.BackgroundTransparency = 0.03
     row.BorderSizePixel = 0
+    row.ClipsDescendants = true
     row.LayoutOrder = order or 1
     Utils:RoundCorner(row, 10)
 
-    local rowStr = Instance.new("UIStroke", row)
+    local rowStr = applyBorderStroke(Utils, Instance.new("UIStroke", row))
     rowStr.Thickness = 1
-    rowStr.Color = activeTheme.Stroke
-    rowStr.Transparency = 0.40
+    rowStr.Color = mutedStroke(Utils, activeTheme.Stroke, 0.55)
+    rowStr.Transparency = 0.35
 
     local tit = Instance.new("TextLabel", row)
     tit.Size = UDim2.new(1, -162, 0, 18)
@@ -1587,7 +1624,7 @@ function Components:CreateTextbox(ctx, title, desc, placeholder, defaultText, pa
     inpBox.Size = UDim2.new(0, 132, 0, 28)
     inpBox.Position = UDim2.new(1, -10, 0.5, 0)
     inpBox.BackgroundColor3 = activeTheme.BoxBg
-    inpBox.BackgroundTransparency = 0.12
+    inpBox.BackgroundTransparency = 0.04
     inpBox.BorderSizePixel = 0
     inpBox.ClipsDescendants = true
     inpBox:SetAttribute("NoTrans", true)
@@ -1597,10 +1634,10 @@ function Components:CreateTextbox(ctx, title, desc, placeholder, defaultText, pa
     inpPad.PaddingLeft = UDim.new(0, 8)
     inpPad.PaddingRight = UDim.new(0, 8)
 
-    local inpStr = Instance.new("UIStroke", inpBox)
+    local inpStr = applyBorderStroke(Utils, Instance.new("UIStroke", inpBox))
     inpStr.Thickness = 1
-    inpStr.Color = activeTheme.Stroke
-    inpStr.Transparency = 0.30
+    inpStr.Color = mutedStroke(Utils, activeTheme.Stroke, 0.55)
+    inpStr.Transparency = 0.35
     inpStr:SetAttribute("NoTrans", true)
 
     local inp = Instance.new("TextBox", inpBox)
@@ -1628,18 +1665,18 @@ function Components:CreateTextbox(ctx, title, desc, placeholder, defaultText, pa
 
     table.insert(ctx.Connections, inp.FocusLost:Connect(function(enterPressed)
         inp.TextTruncate = Enum.TextTruncate.AtEnd
-        inpStr.Color = ctx.ActiveTheme.Stroke
-        inpStr.Transparency = 0.30
+        inpStr.Color = mutedStroke(Utils, ctx.ActiveTheme.Stroke, 0.55)
+        inpStr.Transparency = 0.35
         if callback then callback(inp.Text, enterPressed) end
     end))
 
     table.insert(ctx.State.themeSubscribers, function(th)
         row.BackgroundColor3 = th.RowBg
-        rowStr.Color = th.Stroke
+        rowStr.Color = mutedStroke(Utils, th.Stroke, 0.55)
         sub.TextColor3 = th.SubText
         inpBox.BackgroundColor3 = th.BoxBg
         inp.PlaceholderColor3 = th.SubText:Lerp(th.BoxBg, 0.25)
-        inpStr.Color = th.Stroke
+        inpStr.Color = mutedStroke(Utils, th.Stroke, 0.55)
     end)
 
     return {
@@ -1657,8 +1694,9 @@ function Components:CreateLabel(ctx, text, parent, order)
     local row = Instance.new("Frame", parent)
     row.Size = UDim2.new(1, 0, 0, 32)
     row.BackgroundColor3 = activeTheme.RowBg
-    row.BackgroundTransparency = 0.35
+    row.BackgroundTransparency = 0.04
     row.BorderSizePixel = 0
+    row.ClipsDescendants = true
     row.LayoutOrder = order or 1
     Utils:RoundCorner(row, 8)
 

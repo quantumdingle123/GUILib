@@ -98,6 +98,30 @@ local SURFACE_PALETTES = {
         Well         = Color3.fromRGB(6, 20, 18),
         SubText      = Color3.fromRGB(204, 248, 232)
     },
+    Fog = {
+        SurfaceStart = Color3.fromRGB(24, 28, 36),
+        SurfaceEnd   = Color3.fromRGB(42, 48, 60),
+        Well         = Color3.fromRGB(16, 19, 25),
+        SubText      = Color3.fromRGB(224, 230, 240)
+    },
+    Apricot = {
+        SurfaceStart = Color3.fromRGB(34, 18, 14),
+        SurfaceEnd   = Color3.fromRGB(58, 31, 22),
+        Well         = Color3.fromRGB(24, 12, 9),
+        SubText      = Color3.fromRGB(252, 226, 206)
+    },
+    Moss = {
+        SurfaceStart = Color3.fromRGB(18, 24, 16),
+        SurfaceEnd   = Color3.fromRGB(32, 44, 28),
+        Well         = Color3.fromRGB(12, 16, 11),
+        SubText      = Color3.fromRGB(222, 232, 210)
+    },
+    Dusk = {
+        SurfaceStart = Color3.fromRGB(18, 19, 32),
+        SurfaceEnd   = Color3.fromRGB(35, 37, 58),
+        Well         = Color3.fromRGB(12, 13, 22),
+        SubText      = Color3.fromRGB(204, 212, 228)
+    },
     Rainbow = {
         SurfaceStart = Color3.fromRGB(16, 17, 26),
         SurfaceEnd   = Color3.fromRGB(26, 28, 42),

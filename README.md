@@ -1,15 +1,16 @@
 # Syntaxis GUI Library (`SyntaxisLib`) v2.3.0
 
-A modular, reusable iOS / Liquid Glass UI library for Roblox Luau scripts. Designed to separate visual architecture, splash loading screens, component rendering, animations, tactile button interactions, and theme state from main automation scripts.
+A modular, solid tactile matte UI library for Roblox Luau scripts. Designed to separate visual architecture, splash loading screens, component rendering, animations, tactile button interactions, and theme state from main automation scripts.
 
 ---
 
 ## What's New in v2.3.0
 
+- 🪨 **Solid Tactile Matte Surfaces & Rounded Drop Shadow (`Utils.lua`, `Window.lua`, `Components.lua`, `Panels.lua`, `Modals.lua`)**: Replaced thin translucent glass chrome with solid matte chassis and recessed well textures (`Utils:ApplySurfaceMaterial` fine surface grain & subtle organic mottling), inner-aligned borders (`Utils:ApplyBorderStroke`), a 16-layer concentric rounded drop shadow matching `CornerRadius = 22`, and centered section headers (`pageLbl`, `pgLine`) with subtle fade/slide-up transitions and a center-out tapered accent underline.
 - 🧊 **Centered Monolith Loading Screen (`Loader.lua`)**: Enable seamlessly via `ShowLoader = true` in `SyntaxisLib:CreateWindow(config)` or construct standalone via `SyntaxisLib:CreateLoader(config)`. Features an iOS-style `Lighting.BlurEffect` depth backdrop (handing off cleanly to `Window` blur), full-bleed dark scrim, emblem badge, tabular percentage telemetry, and a zero-teleport morph directly into the main window and `ToggleOrb`.
 - 📡 **Top-Right Draggable Status Bar & Nearby Players Drawer (`StatusBar.lua`)**: Floating pill displaying LocalPlayer avatar, live Ping (`ms`), FPS (`fps`), and player count (`PlayersButton`), plus an animated scrollable `Nearby players` distance list (`you`, `m` via `StudsToMeters`, `--` fallback), responsive `UIScale` viewport clamping, normalized drag position persistence, and live theme / closed-window `Rainbow` sync.
 - 🖤 **Squircle Toggle Orb & Adaptive Blur (`Window.lua`)**: Black squircle toggle button with monochrome S-emblem (`ToggleIcon`, `ToggleIconTint`) synced cleanly to every theme accent separately from the loader emblem, plus `BackgroundBlur` / `BackgroundBlurSize` window focus depth (`Window:SetBlur`, `GetBlur`).
-- 🎨 **14 Built-In Themes & Live Animated `Rainbow` (`Themes.lua`, `Window.lua`)**: Expanded palette selector in a scrollable 2-column grid (`Sapphire`, `Emerald`, `Ruby`, `Amethyst`, `Midnight`, `Amber`, `Obsidian`, `Sakura`, `Glacier`, `Sunset`, `Frost`, `Vapor`, `Mint`, and live-cycling `Rainbow`) with active outline stroke and left accent indicator.
+- 🎨 **18 Built-In Themes & Live Animated `Rainbow` (`Themes.lua`, `Window.lua`)**: Expanded palette selector in a scrollable 2-column grid (`Sapphire`, `Emerald`, `Ruby`, `Amethyst`, `Midnight`, `Amber`, `Obsidian`, `Sakura`, `Glacier`, `Sunset`, `Frost`, `Vapor`, `Mint`, `Fog`, `Apricot`, `Moss`, `Dusk`, and live-cycling `Rainbow`) with active outline stroke and left accent indicator.
 - 🔢 **Stabilized Tabular Numerals & Layout Reservation (`Utils.lua`)**: `Utils:ApplyTabularFont` (`RobotoMono`) paired with `Utils:CreateNumericFormatter` pre-computes fixed `ReservedWidth` from `[min, max, increment, suffix]` ranges so live scaling readouts, transparency percentages, status telemetry, and loader progress never jitter or push neighboring labels.
 - ✨ **Interaction & Layout Refinements**: Sliding sidebar active-tab indicator (`ActiveTabSlider`) with subtle tab-switch transition, `"No matching controls"` search empty-state card with quick `Clear Search` button and focused search glow, crisp vector `X` search clear button, continuous pointer/touch slider dragging (`Utils:BindSliderDrag`), non-clipping textbox placeholders, cleanly anchored floating dropdown menus, and symmetric rounding (`Utils:RoundToDecimals`) across negative and fractional slider ranges.
 
@@ -31,13 +32,13 @@ GUILib/
     ├── init.lua            # Modular loader entrypoint, version metadata, & ShowLoader orchestration
     ├── Loader.lua          # Centered Monolith splash screen, iOS Blur backdrop, & window morph
     ├── StatusBar.lua       # Draggable top-right telemetry pill & expandable Nearby players drawer
-    ├── Themes.lua          # 14 iOS Liquid Glass palettes (Sapphire..Mint & live Rainbow)
+    ├── Themes.lua          # 18 solid matte palettes (Sapphire..Dusk & live Rainbow)
     ├── Animations.lua      # TweenService presets & tactile button scale feedback
-    ├── Utils.lua           # Safe GUI parenting, UICorner, UIGradient, multi-device slider drag, & tabular numeric formatters
+    ├── Utils.lua           # Safe GUI parenting, UICorner, UIGradient, surface materials, inner strokes, slider drag, & formatters
     ├── Modals.lua          # Warning modals, Discord invite modal, & toast notifications
     ├── Components.lua      # Categories, Toggles, Sliders, Dropdowns, Multi-Dropdowns, Buttons, Textboxes, Keybinds, Labels, Separators
     ├── Panels.lua          # Dynamic Task Priority panel & live Steal Panel list view (with live Rainbow sync)
-    └── Window.lua          # Main window frame, squircle toggle orb, blur engine, search bar, 2-column theme grid, transparency engine, & cleanup
+    └── Window.lua          # Main window frame, 16-layer rounded shadow, squircle orb, blur, search, 2-col theme grid, & transparency
 ```
 
 ---
@@ -106,7 +107,7 @@ CatSteal:CreateSlider("Min Scale", "Minimum size multiplier", 1, 10, 1, 0.5, fun
     print("Min Scale:", value)
 end)
 
--- Add Settings Tab (14-Theme 2-Column Grid + Transparency Slider)
+-- Add Settings Tab (18-Theme 2-Column Grid + Transparency Slider)
 Window:CreateSettingsTab("Settings", "Settings", {
     OnThemeSelected = function(themeName)
         print("Saved theme:", themeName)
@@ -140,7 +141,7 @@ Window:Initialize()
 | `Category:CreateSeparator()` | Subtle horizontal divider line | `Frame` |
 | `Window:CreatePriorityTab(name, title, opts)` | Dynamic reorderable task priority list | `:Render()` |
 | `Window:CreateStealPanelTab(name, title, opts)` | Dynamic sortable item scanner panel | `:Render()` |
-| `Window:CreateSettingsTab(name, title, opts)` | Built-in 14-theme scrollable selector & transparency slider | `Page`, `Index` |
+| `Window:CreateSettingsTab(name, title, opts)` | Built-in 18-theme scrollable selector & transparency slider | `Page`, `Index` |
 | `Window:SetTheme(themeName)` / `Window:GetActiveTheme()` | Switches or inspects the active theme palette (supports animated `Rainbow`) | — |
 | `Window:SetTransparency(percent)` | Sets glass card transparency percentage (`0–100`) | — |
 | `Window:SetBlur(enabled, size)` / `GetBlur()` | Configures or queries the active `BlurEffect` focus backdrop | `boolean, number` |

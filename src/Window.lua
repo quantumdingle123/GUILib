@@ -138,6 +138,102 @@ function Window:Create(lib, config)
 
     local winSize = config.Size or UDim2.new(0, 510, 0, 345)
 
+    local function mutedStroke(col, amt)
+        if Utils and Utils.MutedStrokeColor then
+            return Utils:MutedStrokeColor(col, amt)
+        end
+        return col
+    end
+
+    local function matteChassisSeq(mainSeq, dropBg)
+        local base = dropBg or Color3.fromRGB(16, 18, 22)
+        if typeof(mainSeq) ~= "ColorSequence" then
+            return ColorSequence.new(base)
+        end
+        local out = {}
+        for _, kp in ipairs(mainSeq.Keypoints) do
+            table.insert(out, ColorSequenceKeypoint.new(kp.Time, kp.Value:Lerp(base, 0.18)))
+        end
+        return ColorSequence.new(out)
+    end
+
+    local function matteWellSeq(mainSeq, dropBg)
+        local base = dropBg or Color3.fromRGB(14, 16, 20)
+        local deep = base:Lerp(Color3.fromRGB(8, 10, 14), 0.35)
+        if typeof(mainSeq) ~= "ColorSequence" then
+            return ColorSequence.new(deep, base)
+        end
+        local out = {}
+        for _, kp in ipairs(mainSeq.Keypoints) do
+            local tone = deep:Lerp(kp.Value, 0.24)
+            table.insert(out, ColorSequenceKeypoint.new(kp.Time, tone))
+        end
+        return ColorSequence.new(out)
+    end
+
+    local function applyBorderStroke(stroke)
+        if Utils and Utils.ApplyBorderStroke then
+            return Utils:ApplyBorderStroke(stroke)
+        end
+        if stroke and stroke:IsA("UIStroke") then
+            stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+            pcall(function()
+                stroke.BorderStrokePosition = Enum.BorderStrokePosition.Inner
+            end)
+        end
+        return stroke
+    end
+
+    local SHADOW_LAYERS_SPEC = {
+        { spread = 2,  alpha = 0.065 },
+        { spread = 4,  alpha = 0.060 },
+        { spread = 6,  alpha = 0.056 },
+        { spread = 8,  alpha = 0.052 },
+        { spread = 10, alpha = 0.048 },
+        { spread = 12, alpha = 0.044 },
+        { spread = 14, alpha = 0.040 },
+        { spread = 16, alpha = 0.036 },
+        { spread = 19, alpha = 0.032 },
+        { spread = 22, alpha = 0.028 },
+        { spread = 25, alpha = 0.024 },
+        { spread = 28, alpha = 0.020 },
+        { spread = 31, alpha = 0.016 },
+        { spread = 34, alpha = 0.013 },
+        { spread = 37, alpha = 0.010 },
+        { spread = 40, alpha = 0.007 },
+    }
+
+    local winShadow = Instance.new("Frame", mainUI)
+    winShadow.Name = "WindowShadow"
+    winShadow.AnchorPoint = Vector2.new(0.5, 0.5)
+    winShadow.Position = UDim2.new(0.5, 0, 0.5, 0)
+    winShadow.Size = winSize
+    winShadow.BackgroundTransparency = 1
+    winShadow.BorderSizePixel = 0
+    winShadow.ClipsDescendants = false
+    winShadow.ZIndex = 1
+
+    local shadowLayers = {}
+    for idx, spec in ipairs(SHADOW_LAYERS_SPEC) do
+        local baseTrans = 1 - spec.alpha
+        local layer = Instance.new("Frame", winShadow)
+        layer.Name = "ShadowShell_" .. idx
+        layer.AnchorPoint = Vector2.new(0.5, 0.5)
+        layer.Position = UDim2.fromScale(0.5, 0.5)
+        layer.Size = UDim2.new(1, spec.spread * 2, 1, spec.spread * 2)
+        layer.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+        layer.BackgroundTransparency = baseTrans
+        layer.BorderSizePixel = 0
+        layer.ZIndex = 1
+        local corner = Utils:RoundCorner(layer, 22 + spec.spread)
+        table.insert(shadowLayers, {
+            Frame = layer,
+            Corner = corner,
+            Spread = spec.spread,
+            BaseTrans = baseTrans,
+        })
+    end
+
     local frm = Instance.new("Frame", mainUI)
     frm.Name = "MainFrame"
     frm.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -145,30 +241,46 @@ function Window:Create(lib, config)
     frm.Size = winSize
     frm.ClipsDescendants = true
     frm.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    frm.BackgroundTransparency = 0.14
+    frm.BackgroundTransparency = 0
     frm.BorderSizePixel = 0
+    frm.ZIndex = 2
     Utils:RoundCorner(frm, 22)
 
+    local function syncShadow()
+        local fSize = frm.Size
+        local ratio = (winSize.X.Offset > 0) and math.clamp(fSize.X.Offset / winSize.X.Offset, 0, 1) or 1
+        winShadow.AnchorPoint = frm.AnchorPoint
+        winShadow.Position = frm.Position
+        winShadow.Size = fSize
+        winShadow.Visible = frm.Visible and (fSize.X.Offset > 4 or fSize.X.Scale > 0)
+        for _, entry in ipairs(shadowLayers) do
+            local exp = math.floor(entry.Spread * 2 * ratio + 0.5)
+            entry.Frame.Size = UDim2.new(1, exp, 1, exp)
+            if entry.Corner then
+                entry.Corner.CornerRadius = UDim.new(0, math.floor((22 + entry.Spread) * ratio + 0.5))
+            end
+        end
+    end
+    syncShadow()
+    table.insert(ctx.Connections, frm:GetPropertyChangedSignal("Position"):Connect(syncShadow))
+    table.insert(ctx.Connections, frm:GetPropertyChangedSignal("Size"):Connect(syncShadow))
+    table.insert(ctx.Connections, frm:GetPropertyChangedSignal("Visible"):Connect(syncShadow))
+
     local frmGrad = Utils:MakeGradient(frm, 135)
-    local frmStr = Instance.new("UIStroke", frm)
-    frmStr.Thickness = 1.3
+    local frmStr = applyBorderStroke(Instance.new("UIStroke", frm))
+    frmStr.Thickness = 1
+    frmStr.Color = mutedStroke(activeTheme.Stroke, 0.35)
     frmStr.Transparency = 0.25
 
-    local inner = Instance.new("Frame", frm)
-    inner.Name = "InnerRim"
-    inner.BackgroundTransparency = 1
-    inner.Size = UDim2.new(1, -2, 1, -2)
-    inner.Position = UDim2.new(0, 1, 0, 1)
-    inner.BorderSizePixel = 0
-    inner.ZIndex = 1
-    Utils:RoundCorner(inner, 21)
-
-    local innerGrad = Utils:MakeGradient(inner, 90)
-    innerGrad.Transparency = NumberSequence.new{
-        NumberSequenceKeypoint.new(0, 0.72), 
-        NumberSequenceKeypoint.new(0.45, 0.90), 
-        NumberSequenceKeypoint.new(1, 1)
-    }
+    if Utils.ApplySurfaceMaterial then
+        Utils:ApplySurfaceMaterial(frm, {
+            Mode = "Chassis",
+            CornerRadius = 22,
+            GrainTransparency = 0.90,
+            OrganicTransparency = 0.92,
+            ZIndex = 1,
+        })
+    end
 
     local topBar = Instance.new("Frame", frm)
     topBar.Name = "TitleBar"
@@ -203,17 +315,18 @@ function Window:Create(lib, config)
         searchHolder.Size = UDim2.new(0, 154, 0, 26)
         searchHolder.AnchorPoint = Vector2.new(1, 0.5)
         searchHolder.Position = UDim2.new(1, -12, 0.5, 0)
-        searchHolder.BackgroundColor3 = activeTheme.BoxBg
-        searchHolder.BackgroundTransparency = 0.30
+        searchHolder.BackgroundColor3 = activeTheme.DropBg or activeTheme.BoxBg
+        searchHolder.BackgroundTransparency = 0.04
         searchHolder.BorderSizePixel = 0
+        searchHolder.ClipsDescendants = true
         searchHolder.Active = true
         searchHolder.ZIndex = 5
         Utils:RoundCorner(searchHolder, 999)
 
-        searchStroke = Instance.new("UIStroke", searchHolder)
+        searchStroke = applyBorderStroke(Instance.new("UIStroke", searchHolder))
         searchStroke.Thickness = 1
-        searchStroke.Color = activeTheme.Stroke
-        searchStroke.Transparency = 0.45
+        searchStroke.Color = mutedStroke(activeTheme.Stroke, 0.55)
+        searchStroke.Transparency = 0.38
 
         local searchIcon = Instance.new("TextLabel", searchHolder)
         searchIcon.Name = "Icon"
@@ -323,17 +436,29 @@ function Window:Create(lib, config)
     local side = Instance.new("Frame", frm)
     side.Name = "Sidebar"
     side.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    side.BackgroundTransparency = 0.25
+    side.BackgroundTransparency = 0.04
     side.BorderSizePixel = 0
     side.Position = UDim2.new(0, 10, 0, 50)
     side.Size = UDim2.new(0, 126, 1, -60)
+    side.ClipsDescendants = true
     side.ZIndex = 2
     Utils:RoundCorner(side, 16)
 
     local sideGrad = Utils:MakeGradient(side, 135)
-    local sideStr = Instance.new("UIStroke", side)
+    local sideStr = applyBorderStroke(Instance.new("UIStroke", side))
     sideStr.Thickness = 1
-    sideStr.Transparency = 0.35
+    sideStr.Color = mutedStroke(activeTheme.Stroke, 0.55)
+    sideStr.Transparency = 0.38
+
+    if Utils.ApplySurfaceMaterial then
+        Utils:ApplySurfaceMaterial(side, {
+            Mode = "Well",
+            CornerRadius = 16,
+            GrainTransparency = 0.92,
+            OrganicTransparency = 0.94,
+            ZIndex = 1,
+        })
+    end
 
     local sideBtns = Instance.new("Frame", side)
     sideBtns.Name = "TabList"
@@ -367,17 +492,29 @@ function Window:Create(lib, config)
     local cntFrame = Instance.new("Frame", frm)
     cntFrame.Name = "ContentFrame"
     cntFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    cntFrame.BackgroundTransparency = 0.24
+    cntFrame.BackgroundTransparency = 0.04
     cntFrame.BorderSizePixel = 0
     cntFrame.Position = UDim2.new(0, 144, 0, 50)
     cntFrame.Size = UDim2.new(1, -154, 1, -60)
+    cntFrame.ClipsDescendants = true
     cntFrame.ZIndex = 2
     Utils:RoundCorner(cntFrame, 16)
 
     local cntGrad = Utils:MakeGradient(cntFrame, 135)
-    local cntStr = Instance.new("UIStroke", cntFrame)
+    local cntStr = applyBorderStroke(Instance.new("UIStroke", cntFrame))
     cntStr.Thickness = 1
-    cntStr.Transparency = 0.35
+    cntStr.Color = mutedStroke(activeTheme.Stroke, 0.55)
+    cntStr.Transparency = 0.38
+
+    if Utils.ApplySurfaceMaterial then
+        Utils:ApplySurfaceMaterial(cntFrame, {
+            Mode = "Well",
+            CornerRadius = 16,
+            GrainTransparency = 0.92,
+            OrganicTransparency = 0.94,
+            ZIndex = 1,
+        })
+    end
 
     local pageLbl = Instance.new("TextLabel", cntFrame)
     pageLbl.BackgroundTransparency = 1
@@ -386,21 +523,35 @@ function Window:Create(lib, config)
     pageLbl.Font = Enum.Font.GothamBold
     pageLbl.TextSize = 16
     pageLbl.TextColor3 = Color3.fromRGB(255, 255, 255)
-    pageLbl.TextXAlignment = Enum.TextXAlignment.Left
+    pageLbl.TextXAlignment = Enum.TextXAlignment.Center
+    pageLbl.TextTruncate = Enum.TextTruncate.AtEnd
     pageLbl.Text = "Farm"
+    pageLbl.ZIndex = 3
 
     local pgLine = Instance.new("Frame", cntFrame)
-    pgLine.Size = UDim2.new(0, 32, 0, 2.5)
-    pgLine.Position = UDim2.new(0, 14, 0, 33)
+    pgLine.AnchorPoint = Vector2.new(0.5, 0)
+    pgLine.Size = UDim2.new(0, 0, 0, 2.5)
+    pgLine.Position = UDim2.new(0.5, 0, 0, 33)
     pgLine.BorderSizePixel = 0
+    pgLine.ZIndex = 3
     pgLine:SetAttribute("NoTrans", true)
     Utils:RoundCorner(pgLine, 999)
+
+    local pgLineGrad = Instance.new("UIGradient", pgLine)
+    pgLineGrad.Transparency = NumberSequence.new{
+        NumberSequenceKeypoint.new(0, 1),
+        NumberSequenceKeypoint.new(0.14, 0),
+        NumberSequenceKeypoint.new(0.86, 0),
+        NumberSequenceKeypoint.new(1, 1),
+    }
 
     local pgsHold = Instance.new("Frame", cntFrame)
     pgsHold.Name = "PagesHolder"
     pgsHold.BackgroundTransparency = 1
     pgsHold.Position = UDim2.new(0, 8, 0, 44)
     pgsHold.Size = UDim2.new(1, -16, 1, -50)
+    pgsHold.ClipsDescendants = true
+    pgsHold.ZIndex = 3
 
     local searchEmptyState = Instance.new("Frame", cntFrame)
     searchEmptyState.Name = "SearchEmptyState"
@@ -416,15 +567,25 @@ function Window:Create(lib, config)
     emptyCard.Position = UDim2.fromScale(0.5, 0.48)
     emptyCard.Size = UDim2.new(0, 260, 0, 118)
     emptyCard.BackgroundColor3 = activeTheme.CardBg
-    emptyCard.BackgroundTransparency = 0.20
+    emptyCard.BackgroundTransparency = 0.03
     emptyCard.BorderSizePixel = 0
+    emptyCard.ClipsDescendants = true
     emptyCard.ZIndex = 13
     Utils:RoundCorner(emptyCard, 14)
 
-    local emptyStroke = Instance.new("UIStroke", emptyCard)
+    local emptyStroke = applyBorderStroke(Instance.new("UIStroke", emptyCard))
     emptyStroke.Thickness = 1
     emptyStroke.Transparency = 0.35
-    emptyStroke.Color = activeTheme.Stroke
+    emptyStroke.Color = mutedStroke(activeTheme.Stroke, 0.55)
+
+    if Utils.ApplySurfaceMaterial then
+        Utils:ApplySurfaceMaterial(emptyCard, {
+            Mode = "Card",
+            CornerRadius = 14,
+            GrainTransparency = 0.92,
+            ZIndex = 13,
+        })
+    end
 
     local emptyTitle = Instance.new("TextLabel", emptyCard)
     emptyTitle.Size = UDim2.new(1, -24, 0, 20)
@@ -564,13 +725,19 @@ function Window:Create(lib, config)
         if not data or not ctx.ActiveTheme then return end
         local th = ctx.ActiveTheme
         if sharedState.curCat == idx then
+            local activeLeft = th.Accent
+            local accentLuma = activeLeft.R * 0.299 + activeLeft.G * 0.587 + activeLeft.B * 0.114
+            if accentLuma > 0.52 then
+                activeLeft = activeLeft:Lerp(th.CardBg or Color3.fromRGB(30, 34, 46), 0.42)
+            end
+            local activeRight = th.Accent:Lerp(th.Accent2 or th.Accent, 0.45)
             data.Gradient.Color = ColorSequence.new{
-                ColorSequenceKeypoint.new(0, th.Accent),
-                ColorSequenceKeypoint.new(1, th.Accent2)
+                ColorSequenceKeypoint.new(0, activeRight),
+                ColorSequenceKeypoint.new(1, activeLeft)
             }
             data.Stroke.Color = th.Accent2
-            data.Stroke.Transparency = 0.15
-            data.Button.BackgroundTransparency = 0.08
+            data.Stroke.Transparency = 0.18
+            data.Button.BackgroundTransparency = 0.02
             data.Label.TextColor3 = Color3.fromRGB(255, 255, 255)
             data.Indicator.BackgroundTransparency = 1
             if not skipTweens then
@@ -578,9 +745,9 @@ function Window:Create(lib, config)
             end
         else
             data.Gradient.Color = hov and th.ButtonHover or th.Button
-            data.Stroke.Color = th.Stroke
-            data.Stroke.Transparency = 0.40
-            data.Button.BackgroundTransparency = 0.28
+            data.Stroke.Color = mutedStroke(th.Stroke, 0.52)
+            data.Stroke.Transparency = 0.38
+            data.Button.BackgroundTransparency = 0.06
             data.Label.TextColor3 = th.Text
             data.Indicator.BackgroundTransparency = 1
             if not skipTweens then
@@ -645,6 +812,7 @@ function Window:Create(lib, config)
     end
 
     local pendingUnderlineUpdate = false
+    local pageTitleTween, pgLineTween
 
     local function updatePageUnderline()
         if not frm.Visible or not ctx.IsAlive then return end
@@ -652,10 +820,18 @@ function Window:Create(lib, config)
         if tw <= 0 and pageLbl.Text ~= "" and Utils and Utils.MeasureTextWidth then
             tw = Utils:MeasureTextWidth(pageLbl.Text, pageLbl.TextSize, pageLbl.FontFace, pageLbl.Font)
         end
+        local maxW = math.max(24, cntFrame.AbsoluteSize.X - 28)
+        local targetW = math.clamp(math.floor(tw + 10 + 0.5), 24, maxW)
         pendingUnderlineUpdate = false
+        if pgLineTween then
+            pcall(function() pgLineTween:Cancel() end)
+            pgLineTween = nil
+        end
         pgLine.Size = UDim2.new(0, 0, 0, 2.5)
-        Animations:Tween(pgLine, TweenInfo.new(0.32, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
-            Size = UDim2.new(0, tw, 0, 2.5)
+        pgLine.BackgroundTransparency = 0.25
+        pgLineTween = Animations:Tween(pgLine, TweenInfo.new(0.30, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+            Size = UDim2.new(0, targetW, 0, 2.5),
+            BackgroundTransparency = 0,
         })
     end
 
@@ -691,7 +867,22 @@ function Window:Create(lib, config)
             else
                 pgsHold.Position = UDim2.new(0, 8, 0, 44)
             end
+            if pageTitleTween then
+                pcall(function() pageTitleTween:Cancel() end)
+                pageTitleTween = nil
+            end
             pageLbl.Text = ctx.Tabs[idx].Title
+            if changedTab and frm.Visible then
+                pageLbl.Position = UDim2.new(0, 14, 0, 14)
+                pageLbl.TextTransparency = 0.65
+                pageTitleTween = Animations:Tween(pageLbl, TweenInfo.new(0.20, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                    Position = UDim2.new(0, 14, 0, 10),
+                    TextTransparency = 0,
+                })
+            else
+                pageLbl.Position = UDim2.new(0, 14, 0, 10)
+                pageLbl.TextTransparency = 0
+            end
             pendingUnderlineUpdate = true
             task.spawn(function()
                 task.wait()
@@ -832,6 +1023,9 @@ function Window:Create(lib, config)
             end
         end
         doT(frm)
+        for _, entry in ipairs(shadowLayers) do
+            entry.Frame.BackgroundTransparency = entry.BaseTrans + ((1 - entry.BaseTrans) * (a * 0.78))
+        end
         for _, child in ipairs(frm:GetDescendants()) do doT(child) end
     end
 
@@ -842,13 +1036,13 @@ function Window:Create(lib, config)
 
         topTxt.TextColor3 = Color3.new(1, 1, 1)
         pageLbl.TextColor3 = Color3.new(1, 1, 1)
-        frmGrad.Color = t.Main
+        frmGrad.Color = matteChassisSeq(t.Main, t.DropBg)
         topBarGrad.Color = t.Topbar
-        sideGrad.Color = t.Main
-        cntGrad.Color = t.Main
-        frmStr.Color = t.GlassRim or t.Stroke
-        sideStr.Color = t.Stroke
-        cntStr.Color = t.Stroke
+        sideGrad.Color = matteWellSeq(t.Main, t.DropBg)
+        cntGrad.Color = matteWellSeq(t.Main, t.DropBg)
+        frmStr.Color = mutedStroke(t.Stroke, 0.35)
+        sideStr.Color = mutedStroke(t.Stroke, 0.55)
+        cntStr.Color = mutedStroke(t.Stroke, 0.55)
         local orbAccent = resolveOrbAccent(t)
         tglBtn.BackgroundColor3 = ORB_BLACK_BG
         tglStr.Color = orbAccent
@@ -856,16 +1050,12 @@ function Window:Create(lib, config)
             tglIcon.ImageColor3 = orbAccent
         end
         pgLine.BackgroundColor3 = t.Accent
-        innerGrad.Color = ColorSequence.new{
-            ColorSequenceKeypoint.new(0, t.Accent2),
-            ColorSequenceKeypoint.new(1, t.Accent)
-        }
 
         if sldrUI.Txt then
             sldrUI.Txt.TextColor3 = Color3.new(1, 1, 1)
             if sldrUI.ValTxt then sldrUI.ValTxt.TextColor3 = t.Accent2 end
             sldrUI.Grad.Color = t.Topbar
-            sldrUI.Str.Color = t.Stroke
+            sldrUI.Str.Color = mutedStroke(t.Stroke, 0.55)
             sldrUI.Trk.BackgroundColor3 = t.SwitchOff
             sldrUI.Fil.BackgroundColor3 = t.Accent
             sldrUI.Kn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
@@ -879,14 +1069,14 @@ function Window:Create(lib, config)
             end
         end
         if ctx.SpSortBtn then ctx.SpSortBtn.BackgroundColor3 = t.BoxBg end
-        if ctx.SpSortStr then ctx.SpSortStr.Color = t.Stroke end
+        if ctx.SpSortStr then ctx.SpSortStr.Color = mutedStroke(t.Stroke, 0.55) end
         if searchHolder and searchStroke then
-            searchHolder.BackgroundColor3 = t.BoxBg
-            searchStroke.Color = searchFocused and t.Accent or t.Stroke
+            searchHolder.BackgroundColor3 = t.DropBg or t.BoxBg
+            searchStroke.Color = searchFocused and t.Accent or mutedStroke(t.Stroke, 0.55)
         end
         sideSlider.BackgroundColor3 = t.Accent2 or Color3.new(1, 1, 1)
         emptyCard.BackgroundColor3 = t.CardBg
-        emptyStroke.Color = t.Stroke
+        emptyStroke.Color = mutedStroke(t.Stroke, 0.55)
         emptySub.TextColor3 = t.SubText
         emptyClearBtn.BackgroundColor3 = t.Accent
         if clearBtn then
@@ -956,17 +1146,18 @@ function Window:Create(lib, config)
     local function registerSidebarButton(tabData, idx)
         local btn = Instance.new("TextButton", sideBtns)
         btn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-        btn.BackgroundTransparency = 0.25
+        btn.BackgroundTransparency = 0.06
         btn.Size = UDim2.new(1, 0, 0, 38)
         btn.BorderSizePixel = 0
         btn.Text = ""
         btn.AutoButtonColor = false
+        btn.ClipsDescendants = true
         btn.LayoutOrder = idx
         Utils:RoundCorner(btn, 12)
         Animations:AttachTactile(btn, ctx.Connections)
 
         local g = Utils:MakeGradient(btn, 135)
-        local s = Instance.new("UIStroke", btn)
+        local s = applyBorderStroke(Instance.new("UIStroke", btn))
         s.Thickness = 1
         s.Transparency = 0.35
 
@@ -1193,11 +1384,11 @@ function Window:Create(lib, config)
             searchFocused = false
             filterSearch(searchInp.Text)
             Animations:Tween(searchStroke, Animations.Fast, {
-                Color = ctx.ActiveTheme.Stroke,
-                Transparency = 0.45
+                Color = mutedStroke(ctx.ActiveTheme.Stroke, 0.55),
+                Transparency = 0.38
             })
             Animations:Tween(searchHolder, Animations.Fast, {
-                BackgroundTransparency = 0.30
+                BackgroundTransparency = 0.04
             })
         end))
 
@@ -1208,7 +1399,7 @@ function Window:Create(lib, config)
                 Transparency = 0.15
             })
             Animations:Tween(searchHolder, Animations.Fast, {
-                BackgroundTransparency = 0.18
+                BackgroundTransparency = 0.01
             })
         end))
 
@@ -1523,15 +1714,17 @@ function Window:Create(lib, config)
 
         sldrUI.Bg = Instance.new("Frame", setPg)
         sldrUI.Bg.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-        sldrUI.Bg.BackgroundTransparency = 0.22
+        sldrUI.Bg.BackgroundTransparency = 0.03
         sldrUI.Bg.Position = UDim2.new(0, 0, 1, -86)
         sldrUI.Bg.Size = UDim2.new(1, 0, 0, 42)
         sldrUI.Bg.BorderSizePixel = 0
+        sldrUI.Bg.ClipsDescendants = true
         Utils:RoundCorner(sldrUI.Bg, 12)
         sldrUI.Grad = Utils:MakeGradient(sldrUI.Bg, 135)
-        sldrUI.Str = Instance.new("UIStroke", sldrUI.Bg)
+        sldrUI.Str = applyBorderStroke(Instance.new("UIStroke", sldrUI.Bg))
         sldrUI.Str.Thickness = 1
-        sldrUI.Str.Transparency = 0.40
+        sldrUI.Str.Color = mutedStroke(activeTheme.Stroke, 0.55)
+        sldrUI.Str.Transparency = 0.38
 
         sldrUI.Txt = Instance.new("TextLabel", sldrUI.Bg)
         sldrUI.Txt.BackgroundTransparency = 1
@@ -1594,15 +1787,16 @@ function Window:Create(lib, config)
 
         local prevBox = Instance.new("Frame", setPg)
         prevBox.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-        prevBox.BackgroundTransparency = 0.08
+        prevBox.BackgroundTransparency = 0.02
         prevBox.Position = UDim2.new(0, 0, 1, -36)
         prevBox.Size = UDim2.new(1, 0, 0, 34)
         prevBox.BorderSizePixel = 0
+        prevBox.ClipsDescendants = true
         Utils:RoundCorner(prevBox, 12)
         prevGrad = Utils:MakeGradient(prevBox, 135)
-        prevStr = Instance.new("UIStroke", prevBox)
+        prevStr = applyBorderStroke(Instance.new("UIStroke", prevBox))
         prevStr.Thickness = 1
-        prevStr.Transparency = 0.30
+        prevStr.Transparency = 0.25
 
         prevTxt = Instance.new("TextLabel", prevBox)
         prevTxt.BackgroundTransparency = 1
@@ -1635,6 +1829,7 @@ function Window:Create(lib, config)
             barFill.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
             barFill.BackgroundTransparency = 0
             barFill.BorderSizePixel = 0
+            barFill.ClipsDescendants = true
             barFill.ZIndex = 2
             barFill:SetAttribute("NoTrans", true)
             Utils:RoundCorner(barFill, 10)
@@ -1642,7 +1837,7 @@ function Window:Create(lib, config)
             local g = Utils:MakeGradient(barFill, td.IsRainbow and 0 or 135)
             g.Color = td.Preview or td.Main
 
-            local s = Instance.new("UIStroke", barFill)
+            local s = applyBorderStroke(Instance.new("UIStroke", barFill))
             s.Thickness = 1
             s.Color = td.Stroke
             s.Transparency = 0.42
